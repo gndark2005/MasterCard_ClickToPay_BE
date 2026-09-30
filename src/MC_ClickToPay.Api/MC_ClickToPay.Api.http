@@ -1,0 +1,12 @@
+@baseUrl = https://localhost:7180
+@apiKey = clicktopay-dev-key
+@encryptedPayload = replace-with-five-part-jwe
+
+### Decrypt the encryptedPayload extracted from a verified Checkout response
+POST {{baseUrl}}/api/payloads/decrypt
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+
+{
+  "encryptedPayload": "{{encryptedPayload}}"
+}

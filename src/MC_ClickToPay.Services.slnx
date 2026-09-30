@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="MC_ClickToPay.Api/MC_ClickToPay.Api.csproj" />
+  <Project Path="MC_ClickToPay.Services/MC_ClickToPay.Services/MC_ClickToPay.Services.csproj" />
+  <Folder Name="/tests/">
+    <Project Path="../tests/MC_ClickToPay.Api.Tests/MC_ClickToPay.Api.Tests.csproj" />
+    <Project Path="../tests/MC_ClickToPay.Services.Tests/MC_ClickToPay.Services.Tests.csproj" />
+  </Folder>
+</Solution>
