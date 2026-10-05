@@ -8,6 +8,12 @@ using MC_ClickToPay.Services.Payments;
 using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
+if (builder.Environment.IsDevelopment())
+{
+    // Git-ignored local settings (key paths, passwords); they override appsettings.json and User Secrets.
+    builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+}
+
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 256 * 1024);
 builder.Services.AddFastEndpoints();
 builder.Services.SwaggerDocument(options =>

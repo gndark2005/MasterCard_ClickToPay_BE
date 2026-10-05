@@ -6,3 +6,5 @@ TestResults/
 *.pfx
 *.pem
 *.key
+# Local key paths and passwords (loaded only in Development). Never commit.
+**/appsettings.Local.json

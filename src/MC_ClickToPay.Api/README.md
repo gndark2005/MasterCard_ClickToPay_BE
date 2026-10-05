@@ -51,6 +51,10 @@ dotnet user-secrets set "MastercardApi:ConsumerKey" "<clientId!keyId>" --project
 Environment variables work too (`PayloadEncryption__CertificatePath`, ...). Check what is set with
 `dotnet user-secrets list --project src/MC_ClickToPay.Api`.
 
+Alternatively, put the same keys in `src/MC_ClickToPay.Api/appsettings.Local.json` (same JSON shape as
+`appsettings.json`). It is git-ignored, loaded only in `Development` and overrides `appsettings.json`, User Secrets
+and environment variables. The payment demo supports the same file.
+
 ## Required settings
 
 Only payload decryption (`POST /api/payloads/decrypt`) is in use for now, so only its settings are required. The API
