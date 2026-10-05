@@ -2,6 +2,7 @@ using FastEndpoints;
 using FastEndpoints.Swagger;
 using MC_ClickToPay.Api.Authentication;
 using MC_ClickToPay.Api.Keys;
+using MC_ClickToPay.Services.Checkout;
 using MC_ClickToPay.Services.DependencyInjection;
 using Microsoft.AspNetCore.Authentication;
 
@@ -30,6 +31,9 @@ builder.Services.SwaggerDocument(options =>
 builder.Services.AddProblemDetails();
 builder.Services.Configure<PayloadEncryptionOptions>(builder.Configuration.GetSection("PayloadEncryption"));
 builder.Services.AddMastercardPayloadDecryption<CertificatePayloadDecryptionKeyProvider>();
+builder.Services.Configure<MastercardCheckoutOptions>(builder.Configuration.GetSection("MastercardApi"));
+builder.Services.Configure<MastercardSigningKeyOptions>(builder.Configuration.GetSection("MastercardApi"));
+builder.Services.AddMastercardCheckout<CertificateSigningKeyProvider>();
 builder.Services.AddAuthentication(ApiKeyAuthenticationHandler.SchemeName)
     .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
         ApiKeyAuthenticationHandler.SchemeName, _ => { });

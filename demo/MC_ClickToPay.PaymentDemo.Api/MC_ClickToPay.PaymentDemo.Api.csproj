@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Reuses the existing payload decryption unchanged; nothing in src/ references this demo. -->
+    <ProjectReference Include="../../src/MC_ClickToPay.Services/MC_ClickToPay.Services/MC_ClickToPay.Services.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FastEndpoints" Version="8.3.0" />
+    <PackageReference Include="FastEndpoints.Swagger" Version="8.3.0" />
+  </ItemGroup>
+</Project>

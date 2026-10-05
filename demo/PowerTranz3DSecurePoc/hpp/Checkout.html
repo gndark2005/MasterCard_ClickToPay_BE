@@ -1,0 +1,473 @@
+
+  <head>
+  	<title>Checkout</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<link
+		href="https://fonts.googleapis.com/css?family=Open+Sans:400,300"
+		rel="stylesheet"
+		type="text/css"
+	/>
+	<!--
+	  THEME BLOCK — this is the only part of this file we should be
+	  editing. Everything else (scripts, field names/ids, markup
+	  structure) must stay exactly as PowerTranz provided it, since their
+	  scripts below depend on it.
+
+	  Colors are currently PowerTranz's sandbox defaults. Swap the hex
+	  values once brand colors/logo are decided — nothing else needs to
+	  change to re-theme this page.
+	-->
+	<style>
+		input {
+			padding: 0 2.5%;
+		}
+		#BtnSubmit {
+			background-color: #043ed7; /* TODO: brand primary color */
+			color: #ffffff;
+		}
+		#BtnSubmit:hover {
+			background-color: #01efe9; /* TODO: brand primary hover */
+		}
+		.labelColor {
+			color: #1a1a1a;
+		}
+		.titleColor {
+			color: #0000ff; /* TODO: brand accent/heading color */
+		}
+		.subtitleColor {
+			color: #000000;
+		}
+		.backgroundColor {
+			background-color: #F4EAEB; /* TODO: brand form background */
+		}
+	</style>
+  <!-- PowerTranz HPP scripts — DO NOT modify, remove, or reorder -->
+  <script src="https://cdn1.ptranz.com/file/ptzhpp/stag83dc90d7/HPPAssets/js/scripts-v2/core.js" charset="utf-8"></script>
+  <script src="https://cdn1.ptranz.com/file/ptzhpp/stag83dc90d7/HPPAssets/js/scripts-v2/config.js" charset="utf-8"></script>
+  <script src="https://cdn1.ptranz.com/file/ptzhpp/stag83dc90d7/HPPAssets/js/scripts-v2/main.js" charset="utf-8"></script>
+  <script src="https://cdn1.ptranz.com/file/ptzhpp/stag83dc90d7/HPPAssets/js/mc-sonic.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body id="tailwind-template" class="bg-white py-5"
+  data-assets-url="https://cdn1.ptranz.com/file/ptzhpp/stag83dc90d7"
+  data-email-required="true"
+  data-phone-required="false"
+  data-email-or-phone-required="false"
+  data-enforce-no-special-chars="true">
+
+<div id="animationStep" class="hidden full">
+
+<mc-sonic id="mc-sonic"></mc-sonic>
+
+</div>
+  <div class="container mx-auto max-w-2xl drop-shadow-2xl">
+    <div class="mt-10 sm:mt-0">
+      <div class="mt-5">
+        <form action="" id="FrmCheckout" method="POST">
+          <div class="shadow overflow-hidden sm:rounded-md">
+          <div class="p-8 sm:p-6 backgroundColor">
+          <div class="flex justify-end">
+          <div
+          class="grid grid-cols-2 gap-2 items-center"
+          id="LanguageSelectorField">
+          <label
+            for="LanguageSelectorSelect"
+            class="text-sm font-medium align-middle labelColor" data-i18n="global.language">
+   {{ "global.language" | translate }}
+</label>
+          <select
+            id="LanguageSelectorSelect"
+            name="LanguageSelector"
+            class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            style="line-height: 2.5rem !important"
+          >
+            <option data-i18n="global.en" value="en">EN</option>
+            <option data-i18n="global.es" value="es">ES</option>
+          </select>
+        </div>
+            </div>
+          
+            <div class="flex items-center justify-between mb-5">
+              <div class="flex-1 min-w-0">
+                <div class="grid grid-cols-2 gap-2">
+                  <div class="mt-2">
+                    <h3 class="text-4xl leading-8 font-extrabold titleColor">
+                      Payment Form
+                    </h3>
+                  </div>
+                </div>
+                
+                <div class="flex items-center">
+                <p class="mr-4 text-sm leading-5 subtitleColor" data-i18n="fields.subtitle">
+                {{ "fields.subtitle" | translate }}
+              </p>
+                  <hr class="flex-grow border-gray-300" />
+                </div>
+                
+              </div>
+              <div class="mt-3 flex-shrink-0">
+                <span class="inline-flex rounded-md shadow-sm"> </span>
+              </div>
+            </div>
+              <div class="mt-6">
+                <div class="grid grid-cols-6 gap-6">
+                  <div class="col-span-3 sm:col-span-4" id="CardholderField">
+                    <label
+                      for="CardholderName"
+                      class="required block text-sm font-medium labelColor"
+                               data-i18n="fields.cardHolderName">
+							   {{ "fields.cardHolderName" | translate }}
+					</label>
+                    <input
+                      type="text"
+                      required
+                      maxlength="45"
+                      name="CardholderName"
+                      id="CardholderName"
+                      autocomplete="CardholderName"
+                      class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                      style="line-height: 2.5rem !important"/>
+                    <span class="text-red-500 font-medium text-sm hidden" data-i18n="fields.cardHolderNameErrorMessage">
+							   {{"fields.cardHolderNameErrorMessage" | translate}}
+					</span>
+                  </div>
+
+                  <div class="col-span-3 sm:col-span-2" id="CardNoField">
+                    <label
+                      for="CardNo"
+                      class="required block text-sm font-medium labelColor"
+                               data-i18n="fields.cardNumber"
+                      >{{ "fields.cardNumber" | translate }}</label
+                    >
+                    <input
+                      type="text"
+                      required
+                      maxlength="19"
+                      placeholder="XXXXXXXXXXXXXXXX"
+                      name="CardNo"
+                      id="CardNo"
+                      autocomplete="CardNo"
+                      class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                      style="line-height: 2.5rem !important"
+                    />
+                    <span class="text-red-500 font-medium text-sm hidden"
+                               data-i18n="fields.cardNumberErrorMessage">{{
+                      "fields.cardNumberErrorMessage" | translate
+                    }}</span>
+                  </div>
+                  <div class="col-span-2 sm:col-span-2" id="CardExpDateField">
+                    <label
+                      for="CardExpDate"
+                      class="required block text-sm font-medium labelColor"
+                               data-i18n="fields.expDate"
+                      >{{ "fields.expDate" | translate }}</label
+                    >
+                    <input
+                      type="text"
+                      required
+                      maxlength="4"
+                      placeholder="MMYY"
+                      name="CardExpDate"
+                      id="CardExpDate"
+                      autocomplete="CardExpDate"
+                      class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                      style="line-height: 2.5rem !important"
+                    />
+                    <span class="text-red-500 font-medium text-sm hidden"
+                               data-i18n="fields.expDateErrorMessage">{{
+                      "fields.expDateErrorMessage" | translate
+                    }}</span>
+                  </div>
+                  <div class="col-span-2 sm:col-span-2" id="CardCVV2Field">
+                    <label
+                      for="CardCVV2"
+                      class="required block text-sm font-medium labelColor"
+                               data-i18n="fields.securityCode"
+                      >{{ "fields.securityCode" | translate }}</label
+                    >
+                    <input
+                      type="text"
+                      required
+                      maxlength="4"
+                      placeholder="XXX"
+                      name="CardCVV2"
+                      id="CardCVV2"
+                      autocomplete="CardCVV2"
+                      class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                      style="line-height: 2.5rem !important"
+                    />
+                    <span class="text-red-500 font-medium text-sm hidden"
+                               data-i18n="fields.securityCodeErrorMessage">{{
+                      "fields.securityCodeErrorMessage" | translate
+                    }}</span>
+                  </div>
+
+                  <div class="col-span-2 sm:col-span-2">
+                    <label
+                      for="Amount"
+                      class="text-sm font-medium font-bold labelColor"
+                               data-i18n="fields.amount"
+                      >{{ "fields.amount" | translate }}</label
+                      ><span class="text-sm font-medium font-bold labelColor"> ({PTZ_CURRENCY_CODE}) </span>
+                    <input
+                      type="text"
+                      name="Amount"
+                      id="Amount"
+                      disabled
+                      class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-yellow-500 rounded-md"
+                      style="line-height: 2.5rem !important"/>
+                  </div>
+
+
+                  <div class="col-span-6">
+                    <h4
+                      class="text-lg font-medium titleColor" data-i18n="global.billingDetails"
+                    >
+                      {{ "global.billingDetails" | translate }}
+                    </h4>
+                  </div>
+
+                  <div
+                    class="col-span-3 sm:col-span-3"
+                    id="BillingFirstNameField"
+                  >
+                    <label
+                      for="BillToFirstName"
+                      class="block text-sm font-medium text-gray-700 labelColor"
+                       data-i18n="fields.firstName"
+                      >{{ "fields.firstName" | translate }}</label
+                    >
+                    <input
+                      type="text"
+                      name="BillToFirstName"
+                      id="BillToFirstName"
+                      autocomplete="FirstName"
+                      class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                      style="line-height: 2.5rem !important"
+                    />
+                    <span class="text-red-500 font-medium text-sm hidden" data-i18n="fields.firstNameErrorMessage">{{
+                      "fields.firstNameErrorMessage" | translate
+                    }}</span>
+                  </div>
+                  <div
+                    class="col-span-3 sm:col-span-3"
+                    id="BillingLastNameField"
+                  >
+                    <label
+                      for="BillToLastName"
+                      class="block text-sm font-medium text-gray-700 labelColor"
+                       data-i18n="fields.lastName"
+                      >{{ "fields.lastName" | translate }}</label
+                    >
+                    <input
+                      type="text"
+                      name="BillToLastName"
+                      id="BillToLastName"
+                      autocomplete="LastName"
+                      class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                      style="line-height: 2.5rem !important"
+                    />
+                    <span class="text-red-500 font-medium text-sm hidden" data-i18n="fields.lastNameErrorMessage">{{
+                      "fields.lastNameErrorMessage" | translate
+                    }}</span>
+                  </div>
+                  <div class="col-span-3 sm:col-span-3" id="BillingEmailField">
+                    <label
+                      for="BillToEmail"
+                      class="required block text-sm font-medium text-gray-700 labelColor"
+                      data-i18n="fields.emailRequired">
+                      {{ "fields.emailRequired" | translate }}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      name="BillToEmail"
+                      id="BillToEmail"
+                      autocomplete="email"
+                      class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                      style="line-height: 2.5rem !important" />
+                    <span class="text-red-500 font-medium text-sm hidden" data-i18n="fields.emailErrorMessage">
+					{{ "fields.emailErrorMessage" | translate }}
+					</span>
+                    <span class="text-red-500 font-medium text-sm hidden" data-i18n="fields.emailOrPhoneErrorMessage">{{ "fields.emailOrPhoneErrorMessage" | translate }}</span>
+                  </div>
+                  <div class="col-span-3 sm:col-span-3" id="BillingPhoneField">
+                    <label
+                      for="BillToTelephone"
+                      class="block text-sm font-medium text-gray-700 labelColor"
+                      data-i18n="fields.phone">
+                      {{ "fields.phone" | translate }}
+                    </label>
+                    <input
+                      type="text"
+                      
+                      name="BillToTelephone"
+                      id="BillToTelephone"
+                      autocomplete="phone"
+                      class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                      style="line-height: 2.5rem !important" />
+                    <span class="text-red-500 font-medium text-sm hidden" data-i18n="fields.phoneErrorMessage">{{
+                      "fields.phoneErrorMessage" | translate
+                    }}</span>
+                    <span class="text-red-500 font-medium text-sm hidden" data-i18n="fields.emailOrPhoneErrorMessage">{{ "fields.emailOrPhoneErrorMessage" | translate }}</span>
+                  </div>
+                  <div
+                    class="col-span-2 sm:col-span-2"
+                    id="BillingCountryField"
+                  >
+                    <label
+                      for="BillToCountry"
+                      class="block text-sm font-medium text-gray-700 labelColor"
+					  data-i18n="fields.country"
+                      >{{ "fields.country" | translate }}</label
+                    >
+                    <select
+                      id="BillToCountry"
+                      name="BillToCountry"
+                      autocomplete="country-name"
+                      class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      onchange="changeState(this.value)"
+                      style="line-height: 2.5rem !important"
+                    >
+                      <option selected disabled></option>
+                    </select>
+                    <span class="text-red-500 font-medium text-sm hidden"
+					  data-i18n="fields.countryErrorMessage">{{
+                      "fields.countryErrorMessage" | translate
+                    }}</span>
+                  </div>
+                  <div class="col-span-2 sm:col-span-2" id="BillingStateField">
+                    <label
+                      for="BillToState"
+                      class="block text-sm font-medium text-gray-700 labelColor"
+					  data-i18n="fields.state"
+                      >{{ "fields.state" | translate }}</label
+                    >
+                    <select
+                      id="BillToState"
+                      name="BillToState"
+                      autocomplete="state-name"
+                      class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      style="line-height: 2.5rem !important"
+                    >
+                      <option selected disabled></option>
+                    </select>
+                    <span class="text-red-500 font-medium text-sm hidden" 
+					  data-i18n="fields.stateErrorMessage">{{
+                      "fields.stateErrorMessage" | translate
+                    }}</span>
+                  </div>
+
+                  <div
+                    class="col-span-2 sm:col-span-2"
+                    id="BillingPostalCodeField"
+                  >
+                    <label
+                      for="BillToPostCode"
+                      class="block text-sm font-medium text-gray-700 labelColor" 
+					  data-i18n="fields.zip"
+                      >{{ "fields.zip" | translate }}</label
+                    >
+                    <input
+                      type="text"
+                      name="BillToPostCode"
+                      id="BillToPostCode"
+                      autocomplete="postal-code"
+                      class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                      style="line-height: 2.5rem !important"
+                    />
+                    <span class="text-red-500 font-medium text-sm hidden"
+					  data-i18n="fields.zipErrorMessage">{{
+                      "fields.zipErrorMessage" | translate
+                    }}</span>
+                  </div>
+
+                  <div class="col-span-6" id="BillingAddressLine1Field">
+                    <label
+                      for="BillToAddress1"
+                      class="block text-sm font-medium text-gray-700 labelColor"
+					  data-i18n="fields.addressLine1"
+                      >{{ "fields.addressLine1" | translate }}</label
+                    >
+                    <input
+                      type="text"
+                      name="BillToAddress1"
+                      id="BillToAddress1"
+                      autocomplete="street-address"
+                      class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                      style="line-height: 2.5rem !important"
+                    />
+                    <span class="text-red-500 font-medium text-sm hidden"
+					  data-i18n="fields.addressLine1ErrorMessage">{{
+                      "fields.addressLine1ErrorMessage" | translate
+                    }}</span>
+                  </div>
+
+                  <div class="col-span-6" id="BillingAddressLine2Field">
+                    <label
+                      for="BillToAddress2"
+                      class="block text-sm font-medium text-gray-700 labelColor"
+					  data-i18n="fields.addressLine2"
+                      >{{ "fields.addressLine2" | translate }}</label
+                    >
+                    <input
+                      type="text"
+                      name="BillToAddress2"
+                      id="BillToAddress2"
+                      autocomplete="street-address"
+                      class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                      style="line-height: 2.5rem !important"
+                    />
+                    <span class="text-red-500 font-medium text-sm hidden"
+					  data-i18n="fields.addressLine2ErrorMessage">{{
+                      "fields.addressLine2ErrorMessage" | translate
+                    }}</span>
+                  </div>
+
+                </div>
+              </div>
+              <div class="mt-5 text-right">
+                <div class="grid grid-cols-6 gap-6">
+                  <div class="col-span-4"></div>
+                  <div class="col-span-2">
+                  <button
+                  id="BtnSubmit"
+                  name="BtnSubmit"
+                  type="button"
+                  onclick="check(true)"
+                  class="w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2" 
+                               data-i18n="fields.submit">
+                  {{ "fields.submit" | translate }}
+                </button>
+                  </div>
+                </div>
+              </div>
+              <hr class="border-gray-300 border-3 my-5" />
+              <div class="grid grid-cols-2 gap-4 items-center">
+                <div class="flex justify-evenly items-center">
+                  <img
+                    src="https://cdn1.ptranz.com/file/ptzhpp/stag83dc90d7/HPPAssets/images/visa-secure.svg"
+                    width="50px"
+                    height="50px" /><img
+                    src="https://cdn1.ptranz.com/file/ptzhpp/stag83dc90d7/HPPAssets/images/mastercard-idcheck.svg"
+                    width="50px"
+                    height="50px" /><img
+                    src="https://cdn1.ptranz.com/file/ptzhpp/stag83dc90d7/HPPAssets/images/amex-safekey.svg"
+                    width="90px"
+                    height="80px" />
+                </div>
+                <div class="flex justify-end items-center">
+                  <img
+                    src="https://cdn1.ptranz.com/file/ptzhpp/stag83dc90d7/HPPAssets/images/ptz-logo.svg"
+                    class=""
+                    height="55%"
+                    width="55%" />
+                </div>
+              </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>

@@ -15,4 +15,7 @@ public sealed class PaymentTokenDto
 
     [JsonPropertyName("paymentAccountReference")]
     public string? PaymentAccountReference { get; init; }
+
+    [JsonPropertyName("cardholderFullName")]
+    public string? CardholderFullName { get; init; }
 }

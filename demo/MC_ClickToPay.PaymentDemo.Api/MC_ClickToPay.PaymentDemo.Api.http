@@ -1,0 +1,54 @@
+@baseUrl = https://localhost:7190
+@apiKey = payment-demo-dev-key
+
+### 1. Create an encrypted test payload from PaymentDemo:TestPayment (Development only)
+# @name sample
+POST {{baseUrl}}/api/demo/payloads/sample
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+
+{}
+
+### 2. Confirm the payment with the payload from step 1
+POST {{baseUrl}}/api/demo/payments/confirm
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+
+{
+  "encryptedPayload": "{{sample.response.body.$.encryptedPayload}}",
+  "transactionAmount": 6.00,
+  "transactionCurrencyCode": "USD",
+  "orderId": "ORDER-1001"
+}
+
+### 3. Test payload with an expired card (overrides PaymentDemo:TestPayment for this payload only)
+# @name expired
+POST {{baseUrl}}/api/demo/payloads/sample
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+
+{
+  "tokenExpirationMonth": "01",
+  "tokenExpirationYear": "2020"
+}
+
+### 4. Confirm with the expired card -> 422 invalid_payment_data
+POST {{baseUrl}}/api/demo/payments/confirm
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+
+{
+  "encryptedPayload": "{{expired.response.body.$.encryptedPayload}}",
+  "transactionAmount": 6.00,
+  "transactionCurrencyCode": "USD"
+}
+
+### 5. Missing payload -> 400 missing_payload
+POST {{baseUrl}}/api/demo/payments/confirm
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+
+{
+  "transactionAmount": 6.00,
+  "transactionCurrencyCode": "USD"
+}
