@@ -25,6 +25,10 @@ It lives in `demo/` and is independent of the rest of the repository:
   choices as the PowerTranz mapping in `demo/PowerTranz3DSecurePoc`
   (`ClickToPayService.Map`).
 - Hands it to `IPaymentProcessor` and returns a confirmation.
+- The validation, mapping, simulated processor and confirmation service live in
+  `src/MC_ClickToPay.Services/.../Payments` and are shared with the real endpoint
+  `POST /api/payments/confirm` of `MC_ClickToPay.Api`. This demo only adds its own
+  key provider (development key) and the sample payload endpoint.
 
 **What it does NOT do**
 
@@ -75,7 +79,16 @@ endpoint returns `503 decryption_unavailable`.
 
 Keep secrets out of the repository. Set the certificate path and password with
 environment variables or User Secrets (`dotnet user-secrets`), not in a committed
-`appsettings*.json`.
+`appsettings*.json`:
+
+```powershell
+dotnet user-secrets set "PayloadEncryption:CertificatePath" "$env:USERPROFILE\.mastercard\clicktopay\payload_encryption.p12" --project demo/MC_ClickToPay.PaymentDemo.Api
+dotnet user-secrets set "PayloadEncryption:CertificatePassword" "<p12 password>" --project demo/MC_ClickToPay.PaymentDemo.Api
+```
+
+With the certificate set, the confirm endpoint decrypts real Mastercard payloads
+(verified on 2026-10-05 with a sandbox `encryptedPayload`), and the sample
+endpoint encrypts with the certificate's public key.
 
 ### Encryption and decryption
 
@@ -141,7 +154,8 @@ Request body:
 | `encryptedPayload` | yes | Five-part compact JWE, RSA-OAEP-256 / A128CBC-HS256, at most 131072 characters. |
 | `transactionAmount` | yes | Greater than 0, at most 1000000, at most 2 decimals. |
 | `transactionCurrencyCode` | yes | ISO 4217: 3 uppercase letters (`USD`, as Mastercard uses) or 3 digits (`840`, as PowerTranz uses). |
-| `orderId` | no | 1 to 50 letters, digits, `-` or `_`. Generated (`DEMO-...`) when omitted. |
+| `orderId` | no | 1 to 50 letters, digits, `-` or `_`. Generated (`ORD-...`) when omitted. |
+| `eci` | no | 2 digits: `assuranceData.eci` from Mastercard `/checkout` (not inside the payload). Returned as-is in the response. |
 
 Example request:
 
@@ -327,7 +341,9 @@ simulated processor approved it", not that a card was charged.
 
 ## Future PowerTranz integration
 
-The real call plugs in behind `IPaymentProcessor` (`Payments/IPaymentProcessor.cs`):
+The real call plugs in behind `IPaymentProcessor`
+(`src/MC_ClickToPay.Services/MC_ClickToPay.Services/Payments/IPaymentProcessor.cs`), once, for both
+`MC_ClickToPay.Api` and this demo:
 
 1. Add a `PowerTranzPaymentProcessor : IPaymentProcessor` that maps
    `PaymentRequest` to a PowerTranz SPI Sale/Auth. Reuse the existing approach in
@@ -344,14 +360,15 @@ The real call plugs in behind `IPaymentProcessor` (`Payments/IPaymentProcessor.c
 2. Map PowerTranz `Approved`/`IsoResponseCode`/`AuthorizationCode` to
    `PaymentResult`. Throw `PaymentProcessingException`, with a message free of
    card data, when PowerTranz cannot be reached or rejects the request.
-3. In `Program.cs`, register it in place of the simulated processor:
+3. In each `Program.cs`, register it in place of the simulated processor
+   (`AddPaymentConfirmation()` only adds the simulator when nothing else is registered):
    `builder.Services.AddScoped<IPaymentProcessor, PowerTranzPaymentProcessor>();`.
    Keep PowerTranz credentials in User Secrets or environment variables.
 4. Decide how to handle 3-D Secure. If PowerTranz answers with `SP4` and
    `RedirectData`, a single synchronous REST call is no longer enough: the API
    will need a redirect step or a callback.
-5. Optionally accept the `eci` from `POST /api/checkout/complete` in the
-   confirm request. It is not inside the encrypted payload.
+5. Use `PaymentRequest.Eci`: the confirm request already accepts the `eci` from
+   `POST /api/checkout/complete` (it is not inside the encrypted payload).
 
 No change to the endpoint, the decryption, or the response contract is needed for
 this. Only `"processor"` and `"simulated"` change.

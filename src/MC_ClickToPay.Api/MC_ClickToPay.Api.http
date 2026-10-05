@@ -10,3 +10,16 @@ X-Api-Key: {{apiKey}}
 {
   "encryptedPayload": "{{encryptedPayload}}"
 }
+
+### Confirm a payment from the encryptedPayload (simulated processor until PowerTranz is plugged in)
+POST {{baseUrl}}/api/payments/confirm
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+
+{
+  "encryptedPayload": "{{encryptedPayload}}",
+  "transactionAmount": 31.25,
+  "transactionCurrencyCode": "USD",
+  "orderId": "ORDER-5",
+  "eci": "06"
+}

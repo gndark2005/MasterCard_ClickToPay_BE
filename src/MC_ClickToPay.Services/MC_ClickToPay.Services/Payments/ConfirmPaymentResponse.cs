@@ -1,7 +1,6 @@
 using System.Text.Json.Serialization;
-using MC_ClickToPay.PaymentDemo.Api.Payments;
 
-namespace MC_ClickToPay.PaymentDemo.Api.Endpoints;
+namespace MC_ClickToPay.Services.Payments;
 
 /// <summary>Payment confirmation. Card data is limited to the token's last four digits.</summary>
 public sealed class ConfirmPaymentResponse
@@ -44,6 +43,9 @@ public sealed class ConfirmPaymentResponse
     [JsonPropertyName("tokenLast4")]
     public required string TokenLast4 { get; init; }
 
+    [JsonPropertyName("eci")]
+    public string? Eci { get; init; }
+
     [JsonPropertyName("processedAt")]
     public required DateTimeOffset ProcessedAt { get; init; }
 
@@ -61,6 +63,7 @@ public sealed class ConfirmPaymentResponse
         TransactionAmount = confirmation.Request.Amount,
         TransactionCurrencyCode = confirmation.Request.CurrencyCode,
         TokenLast4 = confirmation.Request.TokenLast4,
+        Eci = confirmation.Request.Eci,
         ProcessedAt = confirmation.Result.ProcessedAt
     };
 }

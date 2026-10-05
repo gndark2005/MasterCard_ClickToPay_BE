@@ -1,9 +1,9 @@
-namespace MC_ClickToPay.PaymentDemo.Api.Payments;
+namespace MC_ClickToPay.Services.Payments;
 
 /// <summary>
 /// Processor-neutral payment built from a decrypted Click to Pay payload. The fields follow the PowerTranz Sale
-/// mapping already used in demo/PowerTranz3DSecurePoc/Services/ClickToPayService.cs: the network token goes in
-/// Source.CardPan with its expiry as YYMM and no CVV; the cryptogram travels separately.
+/// mapping used in demo/PowerTranz3DSecurePoc/Services/ClickToPayService.cs: the network token goes in
+/// Source.CardPan with its expiry as YYMM and no CVV; the cryptogram and ECI travel separately.
 /// A class, not a record, so ToString() never prints card data.
 /// </summary>
 public sealed class PaymentRequest
@@ -25,6 +25,9 @@ public sealed class PaymentRequest
     public required string Cryptogram { get; init; }
 
     public required string CryptogramType { get; init; }
+
+    /// <summary>assuranceData.eci from Mastercard /checkout (not inside the encrypted payload), when the caller has it.</summary>
+    public string? Eci { get; init; }
 
     public string? PaymentAccountReference { get; init; }
 

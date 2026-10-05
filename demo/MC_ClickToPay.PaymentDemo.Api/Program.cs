@@ -3,8 +3,8 @@ using FastEndpoints.Swagger;
 using MC_ClickToPay.PaymentDemo.Api.Authentication;
 using MC_ClickToPay.PaymentDemo.Api.Configuration;
 using MC_ClickToPay.PaymentDemo.Api.Keys;
-using MC_ClickToPay.PaymentDemo.Api.Payments;
 using MC_ClickToPay.Services.DependencyInjection;
+using MC_ClickToPay.Services.Payments;
 using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -31,7 +31,6 @@ builder.Services.SwaggerDocument(options =>
     };
 });
 builder.Services.AddProblemDetails();
-builder.Services.AddSingleton(TimeProvider.System);
 
 // Decryption: the existing MC_ClickToPay.Services implementation with the demo's own key provider.
 builder.Services.Configure<DemoPayloadEncryptionOptions>(builder.Configuration.GetSection(DemoPayloadEncryptionOptions.SectionName));
@@ -39,12 +38,12 @@ builder.Services.AddSingleton<EphemeralDevelopmentKey>();
 builder.Services.AddScoped<DemoPayloadKeyProvider>();
 builder.Services.AddMastercardPayloadDecryption<DemoPayloadKeyProvider>();
 
-// Payment: decrypted payload -> PaymentRequest -> IPaymentProcessor. Replace SimulatedPaymentProcessor with the
-// PowerTranz implementation here once a test card can complete the Mastercard -> PowerTranz flow (see README).
+// Payment: the shared MC_ClickToPay.Services flow (decrypted payload -> PaymentRequest -> IPaymentProcessor), the same
+// one MC_ClickToPay.Api uses. The simulated processor stays until PowerTranz is plugged in (see README).
 builder.Services.Configure<PaymentDemoOptions>(builder.Configuration.GetSection(PaymentDemoOptions.SectionName));
-builder.Services.AddSingleton<PaymentRequestFactory>();
-builder.Services.AddScoped<IPaymentProcessor, SimulatedPaymentProcessor>();
-builder.Services.AddScoped<PaymentConfirmationService>();
+builder.Services.Configure<PaymentSimulationOptions>(
+    builder.Configuration.GetSection($"{PaymentDemoOptions.SectionName}:Simulation"));
+builder.Services.AddPaymentConfirmation();
 
 builder.Services.AddAuthentication(DemoApiKeyAuthenticationHandler.SchemeName)
     .AddScheme<AuthenticationSchemeOptions, DemoApiKeyAuthenticationHandler>(

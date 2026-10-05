@@ -28,11 +28,20 @@ public sealed class PayloadApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        // No Mastercard API settings: decryption must work without them.
         builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
-            new Dictionary<string, string?> { ["Authentication:ApiKey"] = ApiKey }));
+            new Dictionary<string, string?>
+            {
+                ["Authentication:ApiKey"] = ApiKey,
+                ["MastercardApi:ConsumerKey"] = "",
+                ["MastercardApi:SigningKeyPath"] = "",
+            }));
         builder.ConfigureServices(services => services.PostConfigure<PayloadEncryptionOptions>(options =>
         {
-            options.CertificatePath = MissingCertificate ? "" : certificatePath;
+            // A configured path whose file is missing: startup passes and decryption returns HTTP 503.
+            options.CertificatePath = MissingCertificate
+                ? Path.Combine(Path.GetTempPath(), $"mctp-missing-{Guid.NewGuid():N}.pfx")
+                : certificatePath;
             options.CertificatePassword = "test-password";
         }));
     }

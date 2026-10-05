@@ -1,4 +1,4 @@
-namespace MC_ClickToPay.PaymentDemo.Api.Payments;
+namespace MC_ClickToPay.Services.Payments;
 
 /// <summary>Mirrors the PowerTranz Sale BillingAddress fields filled by ClickToPayService.Map in the POC.</summary>
 public sealed class PaymentBillingAddress

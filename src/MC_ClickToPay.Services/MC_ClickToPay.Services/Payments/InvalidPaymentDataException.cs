@@ -1,4 +1,4 @@
-namespace MC_ClickToPay.PaymentDemo.Api.Payments;
+namespace MC_ClickToPay.Services.Payments;
 
 /// <summary>The payload decrypted but cannot be paid with. <see cref="Errors"/> name fields and rules, never values.</summary>
 public sealed class InvalidPaymentDataException(IReadOnlyList<string> errors)

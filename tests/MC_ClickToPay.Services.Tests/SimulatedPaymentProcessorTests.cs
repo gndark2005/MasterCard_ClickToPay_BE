@@ -1,8 +1,7 @@
-using MC_ClickToPay.PaymentDemo.Api.Configuration;
-using MC_ClickToPay.PaymentDemo.Api.Payments;
+using MC_ClickToPay.Services.Payments;
 using Xunit;
 
-namespace MC_ClickToPay.PaymentDemo.Api.Tests;
+namespace MC_ClickToPay.Services.Tests;
 
 public sealed class SimulatedPaymentProcessorTests
 {
@@ -11,7 +10,7 @@ public sealed class SimulatedPaymentProcessorTests
     [Fact]
     public async Task ApprovesByDefault()
     {
-        var result = await Processor(new PaymentDemoOptions()).ProcessAsync(Request(), CancellationToken.None);
+        var result = await Processor(new PaymentSimulationOptions()).ProcessAsync(Request(), CancellationToken.None);
 
         Assert.True(result.Approved);
         Assert.Equal("00", result.ResponseCode);
@@ -22,7 +21,7 @@ public sealed class SimulatedPaymentProcessorTests
     [Fact]
     public async Task DeclinesWhenConfigured()
     {
-        var options = new PaymentDemoOptions { Simulation = { Outcome = SimulatedOutcome.Declined } };
+        var options = new PaymentSimulationOptions { Outcome = SimulatedOutcome.Declined };
 
         var result = await Processor(options).ProcessAsync(Request(), CancellationToken.None);
 
@@ -34,14 +33,14 @@ public sealed class SimulatedPaymentProcessorTests
     [Fact]
     public async Task FailsWhenConfigured()
     {
-        var options = new PaymentDemoOptions { Simulation = { Outcome = SimulatedOutcome.Failure } };
+        var options = new PaymentSimulationOptions { Outcome = SimulatedOutcome.Failure };
 
         await Assert.ThrowsAsync<PaymentProcessingException>(
             () => Processor(options).ProcessAsync(Request(), CancellationToken.None));
     }
 
-    private static SimulatedPaymentProcessor Processor(PaymentDemoOptions options) =>
-        new(new TestOptions<PaymentDemoOptions>(options), new FixedTimeProvider(Now));
+    private static SimulatedPaymentProcessor Processor(PaymentSimulationOptions options) =>
+        new(new TestOptions<PaymentSimulationOptions>(options), new FixedTimeProvider(Now));
 
     private static PaymentRequest Request() => new()
     {

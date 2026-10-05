@@ -1,7 +1,7 @@
 using System.Globalization;
 using MC_ClickToPay.Services.Models;
 
-namespace MC_ClickToPay.PaymentDemo.Api.Payments;
+namespace MC_ClickToPay.Services.Payments;
 
 /// <summary>
 /// Validates a decrypted payload and turns it into a <see cref="PaymentRequest"/>, following the field mapping of
@@ -11,7 +11,8 @@ public sealed class PaymentRequestFactory(TimeProvider time)
 {
     public const string SupportedCryptogramType = "CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM";
 
-    public PaymentRequest Create(DecryptedPayloadDto payload, decimal amount, string currencyCode, string orderId)
+    public PaymentRequest Create(DecryptedPayloadDto payload, decimal amount, string currencyCode, string orderId,
+        string? eci = null)
     {
         ArgumentNullException.ThrowIfNull(payload);
 
@@ -71,6 +72,7 @@ public sealed class PaymentRequestFactory(TimeProvider time)
             TokenExpiration = $"{year!.Value % 100:D2}{month!.Value:D2}",
             Cryptogram = cryptogram!,
             CryptogramType = SupportedCryptogramType,
+            Eci = string.IsNullOrWhiteSpace(eci) ? null : eci,
             PaymentAccountReference = payload.Token.PaymentAccountReference,
             CardholderName = name,
             BillingAddress = CreateBillingAddress(payload, name)

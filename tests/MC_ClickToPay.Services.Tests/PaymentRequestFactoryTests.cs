@@ -1,13 +1,43 @@
-using MC_ClickToPay.PaymentDemo.Api.Payments;
+﻿using MC_ClickToPay.Services.Payments;
 using MC_ClickToPay.Services.Models;
 using Xunit;
 
-namespace MC_ClickToPay.PaymentDemo.Api.Tests;
+namespace MC_ClickToPay.Services.Tests;
 
 public sealed class PaymentRequestFactoryTests
 {
     private static readonly PaymentRequestFactory Factory =
         new(new FixedTimeProvider(new DateTimeOffset(2026, 10, 5, 12, 0, 0, TimeSpan.Zero)));
+
+    // Same shape as a real Mastercard sandbox payload (2026-10-01), with fake values: no consumer names, the name
+    // only in token.cardholderFullName, billing + shipping addresses and a mobile number.
+    private const string SandboxShapedPayload = """
+        {"consumerEmailAddress":"jane.demo@example.com",
+         "dynamicData":{"dynamicDataValue":"DEMOcryptogramNOTREAL000000=","dynamicDataType":"CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM"},
+         "shippingAddress":{"zip":"10038","city":"New York","countryCode":"US","name":"Jane Demo","state":"NY","line1":"456 Demo Avenue"},
+         "billingAddress":{"zip":"99950","city":"Denver","countryCode":"US","state":"CO","line2":"Apt 2","line1":"123 Demo Street"},
+         "consumerMobileNumber":{"phoneNumber":"5550100","countryCode":"1"},
+         "token":{"paymentToken":"5480983179133165","paymentAccountReference":"DEMO0000000000000000000000001",
+                  "tokenExpirationMonth":"01","cardholderFullName":"Jane Demo","tokenExpirationYear":"2029"}}
+        """;
+
+    [Fact]
+    public void MapsMastercardSandboxShapedPayloadWithEci()
+    {
+        var payload = System.Text.Json.JsonSerializer.Deserialize<DecryptedPayloadDto>(SandboxShapedPayload)!;
+
+        var request = Factory.Create(payload, 31.25m, "USD", "ORDER-5", eci: "06");
+
+        Assert.Equal("2901", request.TokenExpiration);
+        Assert.Equal("06", request.Eci);
+        Assert.Equal("Jane Demo", request.CardholderName);
+        Assert.Equal("Jane", request.BillingAddress!.FirstName);
+        Assert.Equal("Demo", request.BillingAddress.LastName);
+        Assert.Equal("Denver", request.BillingAddress.City);
+        Assert.Equal("Apt 2", request.BillingAddress.Line2);
+        Assert.Equal("15550100", request.BillingAddress.PhoneNumber);
+        Assert.Equal("jane.demo@example.com", request.BillingAddress.EmailAddress);
+    }
 
     [Fact]
     public void MapsDecryptedPayloadToPaymentRequest()

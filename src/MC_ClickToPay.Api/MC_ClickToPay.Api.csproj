@@ -3,6 +3,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Local keys and paths go in User Secrets (dotnet user-secrets), never in appsettings.json. -->
+    <UserSecretsId>mc-clicktopay-api-3f6b2c1e</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../MC_ClickToPay.Services/MC_ClickToPay.Services/MC_ClickToPay.Services.csproj" />

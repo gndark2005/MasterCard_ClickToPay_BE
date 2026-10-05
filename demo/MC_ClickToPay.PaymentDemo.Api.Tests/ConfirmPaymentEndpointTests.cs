@@ -1,9 +1,9 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Jose;
-using MC_ClickToPay.PaymentDemo.Api.Payments;
+using MC_ClickToPay.Services.Payments;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -53,7 +53,7 @@ public sealed class ConfirmPaymentEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.StartsWith("DEMO-", body.GetProperty("orderId").GetString());
+        Assert.StartsWith("ORD-", body.GetProperty("orderId").GetString());
     }
 
     [Theory]

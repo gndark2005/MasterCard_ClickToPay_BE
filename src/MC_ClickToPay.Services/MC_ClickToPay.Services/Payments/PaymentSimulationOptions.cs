@@ -1,4 +1,4 @@
-namespace MC_ClickToPay.PaymentDemo.Api.Configuration;
+namespace MC_ClickToPay.Services.Payments;
 
 public sealed class PaymentSimulationOptions
 {

@@ -1,4 +1,4 @@
-namespace MC_ClickToPay.PaymentDemo.Api.Payments;
+namespace MC_ClickToPay.Services.Payments;
 
 public sealed class PaymentConfirmation
 {

@@ -1,4 +1,4 @@
-namespace MC_ClickToPay.PaymentDemo.Api.Payments;
+namespace MC_ClickToPay.Services.Payments;
 
 /// <summary>What a processor returns for an approval or a decline (failures throw <see cref="PaymentProcessingException"/>).</summary>
 public sealed class PaymentResult

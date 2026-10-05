@@ -1,15 +1,14 @@
 using System.Globalization;
 using System.Security.Cryptography;
-using MC_ClickToPay.PaymentDemo.Api.Configuration;
 using Microsoft.Extensions.Options;
 
-namespace MC_ClickToPay.PaymentDemo.Api.Payments;
+namespace MC_ClickToPay.Services.Payments;
 
 /// <summary>
 /// Stands in for PowerTranz until a test card can complete the Mastercard -> PowerTranz flow. Nothing leaves the
-/// process; the outcome comes from PaymentDemo:Simulation:Outcome.
+/// process; the outcome comes from <see cref="PaymentSimulationOptions.Outcome"/>.
 /// </summary>
-public sealed class SimulatedPaymentProcessor(IOptionsSnapshot<PaymentDemoOptions> options, TimeProvider time)
+public sealed class SimulatedPaymentProcessor(IOptionsSnapshot<PaymentSimulationOptions> options, TimeProvider time)
     : IPaymentProcessor
 {
     public string Name => "Simulated";
@@ -21,11 +20,11 @@ public sealed class SimulatedPaymentProcessor(IOptionsSnapshot<PaymentDemoOption
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var outcome = options.Value.Simulation.Outcome;
+        var outcome = options.Value.Outcome;
         if (outcome == SimulatedOutcome.Failure)
         {
             throw new PaymentProcessingException(
-                "The simulated payment processor is configured to fail (PaymentDemo:Simulation:Outcome = Failure).");
+                "The simulated payment processor is configured to fail (Simulation Outcome = Failure).");
         }
 
         var approved = outcome == SimulatedOutcome.Approved;
