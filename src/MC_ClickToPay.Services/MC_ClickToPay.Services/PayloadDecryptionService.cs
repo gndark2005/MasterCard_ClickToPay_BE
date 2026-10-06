@@ -96,10 +96,19 @@ public sealed class PayloadDecryptionService(IPayloadDecryptionKeyProvider keyPr
 
     private static void AssertValidDecryptedPayload([NotNull] DecryptedPayloadDto? payload)
     {
-        // This initial service supports the documented tokenized DSRP payload.
-        if (string.IsNullOrWhiteSpace(payload?.Token?.PaymentToken) ||
-            string.IsNullOrWhiteSpace(payload.DynamicData?.DynamicDataValue) ||
-            payload.DynamicData.DynamicDataType != "CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM")
+        // The model was already chosen from dynamicData.dynamicDataType (DecryptedPayloadJsonConverter);
+        // each one needs its credential, and all but FPAN need the dynamic value.
+        var hasDynamicValue = !string.IsNullOrWhiteSpace(payload?.DynamicData?.DynamicDataValue);
+        var valid = payload switch
+        {
+            TokenizedPayloadDto tokenized => !string.IsNullOrWhiteSpace(tokenized.Token?.PaymentToken) && hasDynamicValue,
+            DsrpPanPayloadDto or DynamicSecurityCodePayloadDto =>
+                !string.IsNullOrWhiteSpace(((CardPayloadDto)payload).Card?.PrimaryAccountNumber) && hasDynamicValue,
+            FpanPayloadDto fpan => !string.IsNullOrWhiteSpace(fpan.Card?.PrimaryAccountNumber),
+            _ => false
+        };
+
+        if (payload is null || !valid)
         {
             throw new PayloadDecryptionException(PayloadDecryptionError.InvalidPayload);
         }

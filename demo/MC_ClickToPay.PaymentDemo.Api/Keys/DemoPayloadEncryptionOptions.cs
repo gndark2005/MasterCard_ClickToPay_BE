@@ -5,11 +5,13 @@ public sealed class DemoPayloadEncryptionOptions
     public const string SectionName = "PayloadEncryption";
 
     /// <summary>
-    /// The Mastercard Payload Encryption .p12/.pfx (private key). Required to decrypt real Click to Pay payloads.
-    /// When set, it always takes precedence over <see cref="UseEphemeralDevelopmentKey"/>.
+    /// The Mastercard Payload Encryption private key: a PEM file (.pem, as Mastercard Developers provides it) or a
+    /// .p12/.pfx. Required to decrypt real Click to Pay payloads. When set, it always takes precedence over
+    /// <see cref="UseEphemeralDevelopmentKey"/>.
     /// </summary>
     public string CertificatePath { get; set; } = string.Empty;
 
+    /// <summary>Only for a password-protected .p12/.pfx; not used for .pem.</summary>
     public string? CertificatePassword { get; set; }
 
     /// <summary>

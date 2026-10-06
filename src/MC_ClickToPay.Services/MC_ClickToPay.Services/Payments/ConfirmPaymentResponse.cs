@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace MC_ClickToPay.Services.Payments;
 
-/// <summary>Payment confirmation. Card data is limited to the token's last four digits.</summary>
+/// <summary>Payment confirmation. Card data is limited to the last four digits of the token or PAN.</summary>
 public sealed class ConfirmPaymentResponse
 {
     /// <summary>"Approved" or "Declined".</summary>
@@ -40,8 +40,13 @@ public sealed class ConfirmPaymentResponse
     [JsonPropertyName("transactionCurrencyCode")]
     public required string TransactionCurrencyCode { get; init; }
 
-    [JsonPropertyName("tokenLast4")]
-    public required string TokenLast4 { get; init; }
+    /// <summary>"NetworkToken" (token + cryptogram payload) or "Pan" (card payload, dynamicDataType NONE).</summary>
+    [JsonPropertyName("credentialType")]
+    public required string CredentialType { get; init; }
+
+    /// <summary>Last four digits of the token or PAN; the only card data returned.</summary>
+    [JsonPropertyName("last4")]
+    public required string Last4 { get; init; }
 
     [JsonPropertyName("eci")]
     public string? Eci { get; init; }
@@ -62,7 +67,8 @@ public sealed class ConfirmPaymentResponse
         ResponseMessage = confirmation.Result.ResponseMessage,
         TransactionAmount = confirmation.Request.Amount,
         TransactionCurrencyCode = confirmation.Request.CurrencyCode,
-        TokenLast4 = confirmation.Request.TokenLast4,
+        CredentialType = confirmation.Request.CredentialType.ToString(),
+        Last4 = confirmation.Request.Last4,
         Eci = confirmation.Request.Eci,
         ProcessedAt = confirmation.Result.ProcessedAt
     };

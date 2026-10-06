@@ -20,10 +20,23 @@ public sealed class DecryptPayloadEndpointTests
         using var response = await client.PostAsJsonAsync(Route, new { encryptedPayload = encrypted });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.True(response.Headers.CacheControl!.NoStore);
-        var payload = await response.Content.ReadFromJsonAsync<DecryptedPayloadDto>();
+        var payload = Assert.IsType<TokenizedPayloadDto>(await response.Content.ReadFromJsonAsync<DecryptedPayloadDto>());
         Assert.Equal("5480983179133165", payload!.Token!.PaymentToken);
         Assert.Equal("07", payload.Token.TokenExpirationMonth);
         Assert.Equal("test-cryptogram", payload.DynamicData!.DynamicDataValue);
+    }
+
+    [Fact]
+    public async Task DecryptsWithPemPrivateKeyAsProvidedByMastercard()
+    {
+        using var factory = new PayloadApiFactory { UsePemKey = true };
+        using var client = CreateClient(factory);
+
+        using var response = await client.PostAsJsonAsync(Route, new { encryptedPayload = Encrypt(factory) });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var payload = Assert.IsType<TokenizedPayloadDto>(await response.Content.ReadFromJsonAsync<DecryptedPayloadDto>());
+        Assert.Equal("5480983179133165", payload!.Token!.PaymentToken);
     }
 
     [Theory]

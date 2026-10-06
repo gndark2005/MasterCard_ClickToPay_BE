@@ -21,7 +21,7 @@ public sealed class PayloadDecryptionServiceTests
     public async Task DecryptsAndMapsTokenizedPayload()
     {
         using var key = RSA.Create(2048);
-        var result = await Service(key).DecryptAsync(Request(Encrypt(Payload, key)));
+        var result = Assert.IsType<TokenizedPayloadDto>(await Service(key).DecryptAsync(Request(Encrypt(Payload, key))));
         Assert.Equal("5480983179133165", result.Token!.PaymentToken);
         Assert.Equal("07", result.Token.TokenExpirationMonth);
         Assert.Equal("30", result.Token.TokenExpirationYear);
@@ -30,6 +30,59 @@ public sealed class PayloadDecryptionServiceTests
         Assert.Equal("US", result.BillingAddress!.CountryCode);
         Assert.Equal("0000000000", result.ConsumerMobileNumber!.PhoneNumber);
         Assert.Null(result.ShippingAddress);
+    }
+
+    [Fact]
+    public async Task DecryptsFpanPayload()
+    {
+        using var key = RSA.Create(2048);
+        const string fpan = """
+            {"consumerEmailAddress":"test1234@dummyemail.com","dynamicData":{"dynamicDataType":"NONE"},
+             "billingAddress":{"zip":"10011","city":"New York City","countryCode":"US"},
+             "card":{"cardholderFullName":"john doe","panExpirationYear":"2030","primaryAccountNumber":"5120350100064537","panExpirationMonth":"12"}}
+            """;
+
+        var result = Assert.IsType<FpanPayloadDto>(await Service(key).DecryptAsync(Request(Encrypt(fpan, key))));
+
+        Assert.Equal("5120350100064537", result.Card!.PrimaryAccountNumber);
+        Assert.Equal("12", result.Card.PanExpirationMonth);
+        Assert.Equal("NONE", result.DynamicData!.DynamicDataType);
+    }
+
+    [Theory]
+    [InlineData("""{"card":{"primaryAccountNumber":"5120350100064537"},"dynamicData":{"dynamicDataValue":"637","dynamicDataType":"DYNAMIC_CARD_SECURITY_CODE"}}""")]
+    [InlineData("""{"card":{"primaryAccountNumber":"5120350100064537"},"token":{"paymentToken":"************9541"},"dynamicData":{"dynamicDataValue":"AH14E2rQmy6mABQkMkPpAAADFA==","dynamicDataType":"CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM"}}""")]
+    public async Task AcceptsPanWithDtvcAndDsrpPlusPan(string content)
+    {
+        using var key = RSA.Create(2048);
+
+        var result = Assert.IsAssignableFrom<CardPayloadDto>(await Service(key).DecryptAsync(Request(Encrypt(content, key))));
+
+        Assert.Equal("5120350100064537", result.Card!.PrimaryAccountNumber);
+    }
+
+    [Fact]
+    public async Task RejectsUnsupportedDynamicDataTypeAsInvalidPayload()
+    {
+        using var key = RSA.Create(2048);
+        const string content = """{"token":{"paymentToken":"5480983179133165"},"dynamicData":{"dynamicDataValue":"x","dynamicDataType":"TAVV"}}""";
+
+        var exception = await Assert.ThrowsAsync<PayloadDecryptionException>(() =>
+            Service(key).DecryptAsync(Request(Encrypt(content, key))));
+
+        Assert.Equal(PayloadDecryptionError.InvalidPayload, exception.Error);
+    }
+
+    [Theory]
+    [InlineData("""{"card":{"primaryAccountNumber":"5120350100064537"},"dynamicData":{"dynamicDataType":"CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM"}}""")]
+    [InlineData("""{"card":{"primaryAccountNumber":"5120350100064537"},"dynamicData":{"dynamicDataType":"DYNAMIC_CARD_SECURITY_CODE"}}""")]
+    [InlineData("""{"token":{"paymentToken":"5480983179133165"},"dynamicData":{"dynamicDataType":"NONE"}}""")]
+    public async Task RejectsCredentialWithMismatchedDynamicDataType(string content)
+    {
+        using var key = RSA.Create(2048);
+        var exception = await Assert.ThrowsAsync<PayloadDecryptionException>(() =>
+            Service(key).DecryptAsync(Request(Encrypt(content, key))));
+        Assert.Equal(PayloadDecryptionError.InvalidPayload, exception.Error);
     }
 
     [Theory]

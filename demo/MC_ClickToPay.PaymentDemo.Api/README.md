@@ -67,7 +67,7 @@ them for local runs. Any value can also be set with an environment variable, usi
 | Setting | Default | Purpose |
 |---|---|---|
 | `Authentication:ApiKey` | `payment-demo-dev-key` | Value required in the `X-Api-Key` header. Development key only. |
-| `PayloadEncryption:CertificatePath` | empty | Absolute path to the Mastercard **Payload Encryption** `.p12/.pfx`. Required to decrypt real Mastercard payloads. Takes precedence over the development key. |
+| `PayloadEncryption:CertificatePath` | empty | Absolute path to the Mastercard **Payload Encryption** private key: the `.pem` as Mastercard provides it, or a `.p12/.pfx`. Required to decrypt real Mastercard payloads. Takes precedence over the development key. |
 | `PayloadEncryption:CertificatePassword` | empty | Password of that certificate. |
 | `PayloadEncryption:UseEphemeralDevelopmentKey` | `false` (`true` in Development) | Generates an RSA-2048 key in memory at startup. Payloads made with it stop decrypting when the API restarts. |
 | `PaymentDemo:EnableSamplePayloadEndpoint` | `false` (`true` in Development) | Enables `POST /api/demo/payloads/sample`. Never enable it outside local development. |
@@ -82,8 +82,7 @@ environment variables or User Secrets (`dotnet user-secrets`), not in a committe
 `appsettings*.json`:
 
 ```powershell
-dotnet user-secrets set "PayloadEncryption:CertificatePath" "$env:USERPROFILE\.mastercard\clicktopay\payload_encryption.p12" --project demo/MC_ClickToPay.PaymentDemo.Api
-dotnet user-secrets set "PayloadEncryption:CertificatePassword" "<p12 password>" --project demo/MC_ClickToPay.PaymentDemo.Api
+dotnet user-secrets set "PayloadEncryption:CertificatePath" "$env:USERPROFILE\.mastercard\clicktopay\payload_encryption.pem" --project demo/MC_ClickToPay.PaymentDemo.Api
 ```
 
 With the certificate set, the confirm endpoint decrypts real Mastercard payloads
@@ -183,7 +182,8 @@ Success, `200 OK` (captured from a local run):
   "responseMessage": "Approved (simulated)",
   "transactionAmount": 6.00,
   "transactionCurrencyCode": "USD",
-  "tokenLast4": "3165",
+  "credentialType": "NetworkToken",
+  "last4": "3165",
   "processedAt": "2026-10-05T14:37:39.2449392+00:00"
 }
 ```
@@ -218,7 +218,7 @@ Example `422` (captured from a local run):
   "status": 422,
   "detail": "The decrypted payment data is invalid.",
   "code": "invalid_payment_data",
-  "errors": ["token is expired (tokenExpirationMonth/tokenExpirationYear are in the past)."],
+  "errors": ["token is expired (token.tokenExpirationMonth/token.tokenExpirationYear are in the past)."],
   "traceId": "00-cccfe0cb9bf7a369e2a4531cf7f19ff1-292e2fc4417b5e69-00"
 }
 ```
@@ -350,8 +350,8 @@ The real call plugs in behind `IPaymentProcessor`
    `demo/PowerTranz3DSecurePoc`:
    - `Services/PowerTranzService.cs` for the request, headers and error handling;
    - `Services/ClickToPayService.cs` (`Map`) for the field mapping:
-     - `NetworkToken` -> `Source.CardPan`;
-     - `TokenExpiration` (YYMM) -> `Source.CardExpiration`;
+     - `AccountNumber` (network token or PAN, see `CredentialType`) -> `Source.CardPan`;
+     - `Expiration` (YYMM) -> `Source.CardExpiration`;
      - no CVV;
      - billing `CountryCode` converted from alpha-2 to numeric;
      - the cryptogram and ECI go under the `Source` field names that the PowerTranz

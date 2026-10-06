@@ -6,7 +6,7 @@ namespace MC_ClickToPay.Services.Payments;
 
 /// <summary>
 /// Encrypted payload -> decrypt (<see cref="IPayloadDecryptionService"/>) -> validate/map -> processor.
-/// Logs only the order id, amount, outcome and token last four digits.
+/// Logs only the order id, amount, outcome, credential type and its last four digits.
 /// </summary>
 public sealed class PaymentConfirmationService(
     IPayloadDecryptionService decryption,
@@ -28,8 +28,9 @@ public sealed class PaymentConfirmationService(
         var paymentRequest = requestFactory.Create(payload, request.TransactionAmount!.Value,
             request.TransactionCurrencyCode!, orderId, request.Eci);
         logger.LogInformation(
-            "Order {OrderId}: payload decrypted (token ending {TokenLast4}); sending {Amount} {Currency} to the {Processor} processor.",
-            orderId, paymentRequest.TokenLast4, paymentRequest.Amount, paymentRequest.CurrencyCode, processor.Name);
+            "Order {OrderId}: payload decrypted ({CredentialType} ending {Last4}); sending {Amount} {Currency} to the {Processor} processor.",
+            orderId, paymentRequest.CredentialType, paymentRequest.Last4, paymentRequest.Amount,
+            paymentRequest.CurrencyCode, processor.Name);
 
         var result = await processor.ProcessAsync(paymentRequest, cancellationToken);
         logger.LogInformation("Order {OrderId}: {Processor} processor returned {Outcome} ({ResponseCode}).",

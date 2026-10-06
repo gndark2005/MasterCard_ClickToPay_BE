@@ -43,13 +43,10 @@ public sealed class DemoPayloadKeyProvider(IOptions<DemoPayloadEncryptionOptions
     {
         try
         {
-            using var certificate = X509CertificateLoader.LoadPkcs12FromFile(
-                settings.CertificatePath, settings.CertificatePassword, X509KeyStorageFlags.EphemeralKeySet);
-            var key = includePrivateKey ? certificate.GetRSAPrivateKey() : certificate.GetRSAPublicKey();
-            if (key is null)
-            {
-                throw new DemoKeyUnavailableException();
-            }
+            // Mastercard Developers hands out the Payload Encryption private key as a PEM; a .p12/.pfx also works.
+            var key = Path.GetExtension(settings.CertificatePath).Equals(".pem", StringComparison.OrdinalIgnoreCase)
+                ? LoadPem(settings.CertificatePath, includePrivateKey)
+                : LoadPkcs12(settings, includePrivateKey);
 
             if (key.KeySize < MinimumKeySize)
             {
@@ -64,5 +61,22 @@ public sealed class DemoPayloadKeyProvider(IOptions<DemoPayloadEncryptionOptions
             // Do not propagate certificate paths, passwords or crypto diagnostics to HTTP/logging.
             throw new DemoKeyUnavailableException();
         }
+    }
+
+    private static RSA LoadPem(string path, bool includePrivateKey)
+    {
+        using var privateKey = RSA.Create();
+        privateKey.ImportFromPem(File.ReadAllText(path));
+        var key = RSA.Create();
+        key.ImportParameters(privateKey.ExportParameters(includePrivateKey));
+        return key;
+    }
+
+    private static RSA LoadPkcs12(DemoPayloadEncryptionOptions settings, bool includePrivateKey)
+    {
+        using var certificate = X509CertificateLoader.LoadPkcs12FromFile(
+            settings.CertificatePath, settings.CertificatePassword, X509KeyStorageFlags.EphemeralKeySet);
+        return (includePrivateKey ? certificate.GetRSAPrivateKey() : certificate.GetRSAPublicKey())
+            ?? throw new DemoKeyUnavailableException();
     }
 }

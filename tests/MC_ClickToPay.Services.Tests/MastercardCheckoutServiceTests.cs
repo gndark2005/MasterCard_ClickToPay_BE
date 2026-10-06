@@ -6,6 +6,7 @@ using Jose;
 using MC_ClickToPay.Services.Abstractions;
 using MC_ClickToPay.Services.Checkout;
 using MC_ClickToPay.Services.Exceptions;
+using MC_ClickToPay.Services.Models;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -44,8 +45,9 @@ public sealed class MastercardCheckoutServiceTests
         });
 
         Assert.Equal("06", result.Eci);
-        Assert.Equal("5185600649952671", result.Payload.Token!.PaymentToken);
-        Assert.Equal("Adelle Ryan", result.Payload.Token.CardholderFullName);
+        var tokenized = Assert.IsType<TokenizedPayloadDto>(result.Payload);
+        Assert.Equal("5185600649952671", tokenized.Token!.PaymentToken);
+        Assert.Equal("Adelle Ryan", tokenized.Token.CardholderFullName);
         Assert.Equal("AN5mxS9FCZE2ACfVeZZbAAADFA==", result.Payload.DynamicData!.DynamicDataValue);
 
         var request = Assert.Single(handler.Requests);

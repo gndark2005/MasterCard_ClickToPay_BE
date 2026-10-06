@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -36,7 +36,7 @@ public sealed class ConfirmPaymentEndpointTests
         Assert.True(Guid.TryParse(body.GetProperty("transactionId").GetString(), out _));
         Assert.Equal(6.00m, body.GetProperty("transactionAmount").GetDecimal());
         Assert.Equal("USD", body.GetProperty("transactionCurrencyCode").GetString());
-        Assert.Equal("3165", body.GetProperty("tokenLast4").GetString());
+        Assert.Equal("3165", body.GetProperty("last4").GetString());
         AssertNoPaymentData(text);
         Assert.All(factory.Logs.Messages, AssertNoPaymentData);
         Assert.Contains(factory.Logs.Messages, m => m.Contains("ORDER-1001") && m.Contains("3165"));

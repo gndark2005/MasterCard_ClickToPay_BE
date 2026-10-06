@@ -16,13 +16,19 @@ public sealed class PayloadApiFactory : WebApplicationFactory<Program>
 
     private readonly string certificatePath = Path.Combine(Path.GetTempPath(), $"mctp-test-{Guid.NewGuid():N}.pfx");
 
+    private readonly string pemPath = Path.Combine(Path.GetTempPath(), $"mctp-test-{Guid.NewGuid():N}.pem");
+
     public bool MissingCertificate { get; set; }
+
+    /// <summary>Configure the key as a PKCS#1 PEM ("BEGIN RSA PRIVATE KEY"), as Mastercard Developers provides it.</summary>
+    public bool UsePemKey { get; set; }
 
     public PayloadApiFactory()
     {
         var request = new CertificateRequest("CN=Local Test", EncryptionKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddHours(1));
         File.WriteAllBytes(certificatePath, certificate.Export(X509ContentType.Pfx, "test-password"));
+        File.WriteAllText(pemPath, EncryptionKey.ExportRSAPrivateKeyPem());
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -41,8 +47,8 @@ public sealed class PayloadApiFactory : WebApplicationFactory<Program>
             // A configured path whose file is missing: startup passes and decryption returns HTTP 503.
             options.CertificatePath = MissingCertificate
                 ? Path.Combine(Path.GetTempPath(), $"mctp-missing-{Guid.NewGuid():N}.pfx")
-                : certificatePath;
-            options.CertificatePassword = "test-password";
+                : UsePemKey ? pemPath : certificatePath;
+            options.CertificatePassword = UsePemKey ? null : "test-password";
         }));
     }
 
@@ -53,6 +59,7 @@ public sealed class PayloadApiFactory : WebApplicationFactory<Program>
         {
             EncryptionKey.Dispose();
             File.Delete(certificatePath);
+            File.Delete(pemPath);
         }
     }
 }

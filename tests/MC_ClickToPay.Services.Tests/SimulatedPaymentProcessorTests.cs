@@ -47,8 +47,9 @@ public sealed class SimulatedPaymentProcessorTests
         OrderId = "ORDER-1",
         Amount = 6m,
         CurrencyCode = "USD",
-        NetworkToken = "5480983179133165",
-        TokenExpiration = "3007",
+        CredentialType = PaymentCredentialType.NetworkToken,
+        AccountNumber = "5480983179133165",
+        Expiration = "3007",
         Cryptogram = "cryptogram",
         CryptogramType = PaymentRequestFactory.SupportedCryptogramType
     };

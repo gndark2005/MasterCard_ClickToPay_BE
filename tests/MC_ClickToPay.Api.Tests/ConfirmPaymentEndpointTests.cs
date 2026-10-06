@@ -42,10 +42,75 @@ public sealed class ConfirmPaymentEndpointTests
         Assert.True(body.GetProperty("simulated").GetBoolean());
         Assert.Equal("ORDER-5", body.GetProperty("orderId").GetString());
         Assert.Equal(31.25m, body.GetProperty("transactionAmount").GetDecimal());
-        Assert.Equal("3165", body.GetProperty("tokenLast4").GetString());
+        Assert.Equal("3165", body.GetProperty("last4").GetString());
+        Assert.Equal("NetworkToken", body.GetProperty("credentialType").GetString());
         Assert.Equal("06", body.GetProperty("eci").GetString());
         Assert.DoesNotContain(Token, text);
         Assert.DoesNotContain(Cryptogram, text);
+    }
+
+    [Fact]
+    public async Task ConfirmsFpanPayloadWithSameRequest()
+    {
+        using var factory = new PayloadApiFactory();
+        using var client = CreateClient(factory);
+        const string fpan = """
+            {"consumerEmailAddress":"test1234@dummyemail.com","dynamicData":{"dynamicDataType":"NONE"},
+             "billingAddress":{"zip":"10011","city":"New York City","countryCode":"US","state":"NY","line2":"Floor 10","line1":"100 5th Avenue"},
+             "consumerMobileNumber":{"phoneNumber":"9912793770","countryCode":"1"},
+             "card":{"cardholderFullName":"john doe","panExpirationYear":"2099","primaryAccountNumber":"5120350100064537","panExpirationMonth":"12"}}
+            """;
+
+        using var response = await client.PostAsJsonAsync(Route, Body(Encrypt(factory.EncryptionKey, fpan)));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var text = await response.Content.ReadAsStringAsync();
+        var body = JsonDocument.Parse(text).RootElement;
+        Assert.Equal("Approved", body.GetProperty("status").GetString());
+        Assert.Equal("Pan", body.GetProperty("credentialType").GetString());
+        Assert.Equal("4537", body.GetProperty("last4").GetString());
+        Assert.DoesNotContain("5120350100064537", text);
+    }
+
+    [Theory]
+    [InlineData("""
+        {"dynamicData":{"dynamicDataValue":"637","dynamicDataType":"DYNAMIC_CARD_SECURITY_CODE"},
+         "billingAddress":{"zip":"10011","city":"New York City","countryCode":"US"},
+         "card":{"cardholderFullName":"john doe","panExpirationYear":"2099","primaryAccountNumber":"5120350100064537","panExpirationMonth":"12"}}
+        """)]
+    [InlineData("""
+        {"card":{"primaryAccountNumber":"5120350100064537","panExpirationMonth":"07","panExpirationYear":"2099","cardholderFullName":"John Doe"},
+         "token":{"paymentToken":"************9541","tokenExpirationMonth":"08","tokenExpirationYear":"2099"},
+         "dynamicData":{"dynamicDataValue":"AH14E2rQmy6mABQkMkPpAAADFA==","dynamicDataType":"CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM"},
+         "billingAddress":{"line1":"150 5th Avenue","city":"New York","countryCode":"US","zip":"10011"}}
+        """)]
+    public async Task ConfirmsPanWithDtvcAndDsrpPlusPanWithSameRequest(string decryptedJson)
+    {
+        using var factory = new PayloadApiFactory();
+        using var client = CreateClient(factory);
+
+        using var response = await client.PostAsJsonAsync(Route, Body(Encrypt(factory.EncryptionKey, decryptedJson)));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var text = await response.Content.ReadAsStringAsync();
+        var body = JsonDocument.Parse(text).RootElement;
+        Assert.Equal("Pan", body.GetProperty("credentialType").GetString());
+        Assert.Equal("4537", body.GetProperty("last4").GetString());
+        Assert.DoesNotContain("5120350100064537", text);
+        Assert.DoesNotContain("AH14E2rQmy6mABQkMkPpAAADFA==", text);
+    }
+
+    [Fact]
+    public async Task ConfirmsWithPemPrivateKey()
+    {
+        using var factory = new PayloadApiFactory { UsePemKey = true };
+        using var client = CreateClient(factory);
+
+        using var response = await client.PostAsJsonAsync(Route, Body(Encrypt(factory.EncryptionKey, PayloadJson)));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Approved", body.GetProperty("status").GetString());
     }
 
     [Fact]

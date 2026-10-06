@@ -2,12 +2,15 @@ using System.Text.Json.Serialization;
 
 namespace MC_ClickToPay.Services.Models;
 
-// Classes deliberately avoid record-generated ToString() exposing payment data.
-public sealed class DecryptedPayloadDto
+/// <summary>
+/// Fields common to every decrypted Mastercard payload. The concrete model is chosen from
+/// dynamicData.dynamicDataType by <see cref="DecryptedPayloadJsonConverter"/>:
+/// <see cref="TokenizedPayloadDto"/>, <see cref="DsrpPanPayloadDto"/>, <see cref="DynamicSecurityCodePayloadDto"/> or
+/// <see cref="FpanPayloadDto"/>. Classes, not records, so ToString() never prints payment data.
+/// </summary>
+[JsonConverter(typeof(DecryptedPayloadJsonConverter))]
+public abstract class DecryptedPayloadDto
 {
-    [JsonPropertyName("token")]
-    public PaymentTokenDto? Token { get; init; }
-
     [JsonPropertyName("dynamicData")]
     public DynamicDataDto? DynamicData { get; init; }
 
@@ -34,4 +37,10 @@ public sealed class DecryptedPayloadDto
 
     [JsonPropertyName("consumerMobileNumber")]
     public ConsumerMobileNumberDto? ConsumerMobileNumber { get; init; }
+
+    /// <summary>The cardholder name of the credential (token or card), when Mastercard sends one.</summary>
+    public abstract string? GetCredentialCardholderName();
+
+    /// <summary>The Payment Account Reference of the credential, when Mastercard sends one.</summary>
+    public abstract string? GetCredentialPaymentAccountReference();
 }

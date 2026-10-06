@@ -49,8 +49,11 @@ public sealed class TestPaymentData
     [JsonPropertyName("consumerMobileNumber")]
     public ConsumerMobileNumberDto? ConsumerMobileNumber { get; set; }
 
-    /// <summary>The configured data with <paramref name="overrides"/> applied, as Mastercard would encrypt it.</summary>
-    public DecryptedPayloadDto ToDecryptedPayload(TestPaymentData? overrides = null) => new()
+    /// <summary>
+    /// The configured data with <paramref name="overrides"/> applied, as Mastercard would encrypt it: a tokenized
+    /// payload (token + cryptogram).
+    /// </summary>
+    public TokenizedPayloadDto ToDecryptedPayload(TestPaymentData? overrides = null) => new()
     {
         Token = new PaymentTokenDto
         {
@@ -63,7 +66,7 @@ public sealed class TestPaymentData
         DynamicData = new DynamicDataDto
         {
             DynamicDataValue = overrides?.Cryptogram ?? Cryptogram,
-            DynamicDataType = overrides?.CryptogramType ?? CryptogramType ?? "CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM"
+            DynamicDataType = overrides?.CryptogramType ?? CryptogramType ?? DynamicDataTypes.Cryptogram
         },
         BillingAddress = overrides?.BillingAddress ?? BillingAddress,
         ShippingAddress = overrides?.ShippingAddress ?? ShippingAddress,

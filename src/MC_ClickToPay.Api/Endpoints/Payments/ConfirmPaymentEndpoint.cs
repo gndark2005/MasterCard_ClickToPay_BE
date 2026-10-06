@@ -19,8 +19,9 @@ public sealed class ConfirmPaymentEndpoint(
             s.Summary = "Confirm a payment from a Mastercard encryptedPayload";
             s.Description = "Takes the encryptedPayload returned by Mastercard /checkout (or by POST /api/checkout/complete " +
                 "upstream), decrypts it with the configured Payload Encryption key, validates the payment data, maps it " +
-                "to a PowerTranz-style request and hands it to the payment processor. The processor is SIMULATED until " +
-                "PowerTranz is plugged in: no money moves and the response says simulated = true.";
+                "to a PowerTranz request and hands it to the payment processor: PowerTranz (server-to-server Auth/Sale, " +
+                "no 3-D Secure) when the PowerTranz section is configured, otherwise a SIMULATED processor where no " +
+                "money moves and the response says simulated = true.";
             s.ExampleRequest = new ConfirmPaymentRequest
             {
                 EncryptedPayload = "<header>.<encrypted-key>.<iv>.<ciphertext>.<authentication-tag>",
@@ -73,7 +74,7 @@ public sealed class ConfirmPaymentEndpoint(
                     "It was not encrypted for the configured Payload Encryption key, or it was modified."),
                 PayloadDecryptionError.InvalidPayload => PaymentProblems.Create(422, PaymentProblems.InvalidPaymentData,
                     "Invalid decrypted payment data.",
-                    "The decrypted payload is not a supported tokenized payment (token and cryptogram are required)."),
+                    "The decrypted payload is not a supported payment: it needs token + cryptogram, or card (dynamicDataType NONE)."),
                 _ => PaymentProblems.Create(400, PaymentProblems.InvalidPayload, "Invalid encrypted payload.",
                     "Provide a five-part compact JWE using RSA-OAEP-256 / A128CBC-HS256.")
             });

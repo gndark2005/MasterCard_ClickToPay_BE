@@ -81,11 +81,11 @@ public sealed class SamplePayloadEndpointTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    private static async Task<DecryptedPayloadDto> DecryptAsync(PaymentDemoApiFactory factory, string encrypted)
+    private static async Task<TokenizedPayloadDto> DecryptAsync(PaymentDemoApiFactory factory, string encrypted)
     {
         using var scope = factory.Services.CreateScope();
         var decryption = scope.ServiceProvider.GetRequiredService<IPayloadDecryptionService>();
         Assert.IsType<PayloadDecryptionService>(decryption);
-        return await decryption.DecryptAsync(new DecryptPayloadRequest { EncryptedPayload = encrypted });
+        return Assert.IsType<TokenizedPayloadDto>(await decryption.DecryptAsync(new DecryptPayloadRequest { EncryptedPayload = encrypted }));
     }
 }

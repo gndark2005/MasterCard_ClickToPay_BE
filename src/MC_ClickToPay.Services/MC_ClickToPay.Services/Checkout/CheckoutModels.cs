@@ -36,8 +36,9 @@ public sealed class CompleteCheckoutResult
     [JsonPropertyName("eci")]
     public string? Eci { get; init; }
 
+    /// <summary>The decrypted payload; its concrete model follows dynamicData.dynamicDataType.</summary>
     [JsonPropertyName("payload")]
-    public DecryptedPayloadDto Payload { get; init; } = new();
+    public required DecryptedPayloadDto Payload { get; init; }
 }
 
 public sealed class CheckoutConfirmationRequest

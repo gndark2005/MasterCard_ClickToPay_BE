@@ -1,6 +1,7 @@
 using MC_ClickToPay.Services.Abstractions;
 using MC_ClickToPay.Services.Checkout;
 using MC_ClickToPay.Services.Payments;
+using MC_ClickToPay.Services.Payments.PowerTranz;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -42,6 +43,18 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<PaymentRequestFactory>();
         services.TryAddScoped<IPaymentProcessor, SimulatedPaymentProcessor>();
         services.TryAddScoped<PaymentConfirmationService>();
+        return services;
+    }
+
+    /// <summary>
+    /// Makes PowerTranz the <see cref="IPaymentProcessor"/> (server-to-server Auth/Sale, no 3-D Secure). Call it before
+    /// <see cref="AddPaymentConfirmation"/>; the API binds <see cref="PowerTranzOptions"/>.
+    /// </summary>
+    public static IServiceCollection AddPowerTranzPaymentProcessor(this IServiceCollection services, int timeoutSeconds = 60)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddHttpClient<PowerTranzPaymentProcessor>(client => client.Timeout = TimeSpan.FromSeconds(timeoutSeconds));
+        services.AddScoped<IPaymentProcessor>(sp => sp.GetRequiredService<PowerTranzPaymentProcessor>());
         return services;
     }
 }

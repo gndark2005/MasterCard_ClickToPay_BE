@@ -1,8 +1,8 @@
 namespace MC_ClickToPay.Services.Payments;
 
 /// <summary>
-/// The step after decryption. <see cref="SimulatedPaymentProcessor"/> is registered today; a PowerTranz
-/// implementation replaces it once a test card can complete the Mastercard -> PowerTranz flow.
+/// The step after decryption: <see cref="PowerTranz.PowerTranzPaymentProcessor"/> when PowerTranz is configured,
+/// otherwise <see cref="SimulatedPaymentProcessor"/>.
 /// </summary>
 public interface IPaymentProcessor
 {

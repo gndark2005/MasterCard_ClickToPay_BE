@@ -73,7 +73,7 @@ public sealed class ConfirmPaymentEndpoint(
                     "It was not encrypted for the configured key, or it was modified."),
                 PayloadDecryptionError.InvalidPayload => DemoProblems.Create(422, DemoProblems.InvalidPaymentData,
                     "Invalid decrypted payment data.",
-                    "The decrypted payload is not a supported tokenized payment (token and cryptogram are required)."),
+                    "The decrypted payload is not a supported payment: it needs token + cryptogram, or card (dynamicDataType NONE)."),
                 _ => DemoProblems.Create(400, DemoProblems.InvalidPayload, "Invalid encrypted payload.",
                     "Provide a five-part compact JWE using RSA-OAEP-256 / A128CBC-HS256.")
             });

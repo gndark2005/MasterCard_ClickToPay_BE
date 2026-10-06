@@ -14,6 +14,8 @@ public sealed class DemoPayloadKeyProviderTests : IDisposable
 
     private readonly string certificatePath = Path.Combine(Path.GetTempPath(), $"mctp-demo-test-{Guid.NewGuid():N}.pfx");
 
+    private readonly string pemPath = Path.Combine(Path.GetTempPath(), $"mctp-demo-test-{Guid.NewGuid():N}.pem");
+
     private readonly EphemeralDevelopmentKey ephemeralKey = new();
 
     public DemoPayloadKeyProviderTests()
@@ -22,6 +24,29 @@ public sealed class DemoPayloadKeyProviderTests : IDisposable
         var request = new CertificateRequest("CN=Payment Demo Test", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddHours(1));
         File.WriteAllBytes(certificatePath, certificate.Export(X509ContentType.Pfx, Password));
+
+        // PKCS#1 "BEGIN RSA PRIVATE KEY", the format Mastercard Developers provides.
+        File.WriteAllText(pemPath, key.ExportRSAPrivateKeyPem());
+    }
+
+    [Fact]
+    public async Task PemPrivateKeyDecryptsWhatItsPublicKeyEncrypts()
+    {
+        var provider = Provider(new DemoPayloadEncryptionOptions { CertificatePath = pemPath });
+
+        var payload = await RoundTripAsync(provider);
+
+        Assert.Equal("5480983179133165", payload.Token!.PaymentToken);
+    }
+
+    [Fact]
+    public void PemPublicKeyHasNoPrivateParameters()
+    {
+        var provider = Provider(new DemoPayloadEncryptionOptions { CertificatePath = pemPath });
+
+        using var publicKey = provider.GetPublicKey();
+
+        Assert.Throws<CryptographicException>(() => publicKey.ExportParameters(includePrivateParameters: true));
     }
 
     [Fact]
@@ -92,18 +117,19 @@ public sealed class DemoPayloadKeyProviderTests : IDisposable
     {
         ephemeralKey.Dispose();
         File.Delete(certificatePath);
+        File.Delete(pemPath);
     }
 
     private DemoPayloadKeyProvider Provider(DemoPayloadEncryptionOptions options) =>
         new(new TestOptions<DemoPayloadEncryptionOptions>(options), ephemeralKey);
 
-    private static async Task<DecryptedPayloadDto> RoundTripAsync(DemoPayloadKeyProvider provider)
+    private static async Task<TokenizedPayloadDto> RoundTripAsync(DemoPayloadKeyProvider provider)
     {
         using var publicKey = provider.GetPublicKey();
         var encrypted = JWT.Encode("""
             {"token":{"paymentToken":"5480983179133165"},
              "dynamicData":{"dynamicDataValue":"c","dynamicDataType":"CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM"}}
             """, publicKey, JweAlgorithm.RSA_OAEP_256, JweEncryption.A128CBC_HS256);
-        return await new PayloadDecryptionService(provider).DecryptAsync(new DecryptPayloadRequest { EncryptedPayload = encrypted });
+        return Assert.IsType<TokenizedPayloadDto>(await new PayloadDecryptionService(provider).DecryptAsync(new DecryptPayloadRequest { EncryptedPayload = encrypted }));
     }
 }

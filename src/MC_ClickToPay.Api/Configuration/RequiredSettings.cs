@@ -1,6 +1,7 @@
 using MC_ClickToPay.Api.Keys;
 using MC_ClickToPay.Services.Checkout;
 using MC_ClickToPay.Services.Payments;
+using MC_ClickToPay.Services.Payments.PowerTranz;
 
 namespace MC_ClickToPay.Api.Configuration;
 
@@ -23,7 +24,7 @@ public static class RequiredSettings
         services.AddOptions<PayloadEncryptionOptions>()
             .Bind(configuration.GetSection("PayloadEncryption"))
             .Validate(o => !string.IsNullOrWhiteSpace(o.CertificatePath),
-                "PayloadEncryption:CertificatePath is required: the .p12/.pfx with the Payload Encryption private key " +
+                "PayloadEncryption:CertificatePath is required: the Payload Encryption private key (.pem, or .p12/.pfx) " +
                 "used to decrypt encryptedPayload.")
             .ValidateOnStart();
 
@@ -33,6 +34,9 @@ public static class RequiredSettings
 
         // Optional: outcome of the simulated processor behind POST /api/payments/confirm (default Approved).
         services.Configure<PaymentSimulationOptions>(configuration.GetSection("PaymentSimulation"));
+
+        // Optional: with PowerTranzId/PowerTranzPassword set, PowerTranz replaces the simulated processor.
+        services.Configure<PowerTranzOptions>(configuration.GetSection(PowerTranzOptions.SectionName));
 
         return services;
     }

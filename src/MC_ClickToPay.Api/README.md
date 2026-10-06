@@ -34,16 +34,16 @@ Mastercard Developers gives the project two different RSA keys. Keep both outsid
 
 | Key | Used for | Setting |
 |---|---|---|
-| Payload Encryption private key | Decrypting `encryptedPayload` | `PayloadEncryption:CertificatePath` (`.p12/.pfx`) + `CertificatePassword` |
+| Payload Encryption private key | Decrypting `encryptedPayload` | `PayloadEncryption:CertificatePath` (`.pem`, or `.p12/.pfx` + `CertificatePassword`) |
 | OAuth signing key | Signing `/srci/api/checkout` and `/confirmations` | `MastercardApi:SigningKeyPath` (`.pem`, or `.p12/.pfx` + `SigningKeyPassword`) |
 
-The decryption provider loads a `.p12/.pfx`. If Mastercard gave you the encryption key as a PEM, wrap it in a
-`.p12` (a self-signed certificate around the same key is enough). User Secrets are loaded in the `Development`
+Both keys can be used exactly as Mastercard Developers provides them: a PEM private key
+(`-----BEGIN RSA PRIVATE KEY-----` or `-----BEGIN PRIVATE KEY-----`), detected by the `.pem` extension, with no
+password and no conversion. A `.p12/.pfx` keystore also works. User Secrets are loaded in the `Development`
 environment (the `https` launch profile):
 
 ```powershell
-dotnet user-secrets set "PayloadEncryption:CertificatePath" "$env:USERPROFILE\.mastercard\clicktopay\payload_encryption.p12" --project src/MC_ClickToPay.Api
-dotnet user-secrets set "PayloadEncryption:CertificatePassword" "<p12 password>" --project src/MC_ClickToPay.Api
+dotnet user-secrets set "PayloadEncryption:CertificatePath" "$env:USERPROFILE\.mastercard\clicktopay\payload_encryption.pem" --project src/MC_ClickToPay.Api
 dotnet user-secrets set "MastercardApi:SigningKeyPath" "$env:USERPROFILE\.mastercard\clicktopay\signing_key.pem" --project src/MC_ClickToPay.Api
 dotnet user-secrets set "MastercardApi:ConsumerKey" "<clientId!keyId>" --project src/MC_ClickToPay.Api
 ```
@@ -63,7 +63,7 @@ validates them at startup and refuses to start, naming each missing key (`Config
 | Key | What it is |
 |---|---|
 | `Authentication:ApiKey` | `X-Api-Key` expected from callers. |
-| `PayloadEncryption:CertificatePath` | `.p12/.pfx` with the Payload Encryption private key. `CertificatePassword` if it has one. |
+| `PayloadEncryption:CertificatePath` | Payload Encryption private key: `.pem` as Mastercard provides it, or `.p12/.pfx` (+ `CertificatePassword` if it has one). |
 
 Optional until the full Mastercard → PowerTranz flow is used (`/api/checkout/complete` and `/confirmations` return
 HTTP 502/503 without them): `MastercardApi:BaseUrl`, `SrcDpaId`, `ConsumerKey` (`clientId!keyId`),
@@ -133,7 +133,7 @@ Headers: `Content-Type: application/json`, `X-Api-Key: <Authentication:ApiKey>`.
   "status": "Approved", "approved": true, "simulated": true, "processor": "Simulated",
   "orderId": "ORDER-5", "transactionId": "5d13b388-211c-4f77-8752-453b7f3d6f1e",
   "authorizationCode": "464006", "responseCode": "00", "responseMessage": "Approved (simulated)",
-  "transactionAmount": 31.25, "transactionCurrencyCode": "USD", "tokenLast4": "2671", "eci": "06",
+  "transactionAmount": 31.25, "transactionCurrencyCode": "USD", "credentialType": "NetworkToken", "last4": "2671", "eci": "06",
   "processedAt": "2026-10-05T17:15:53.3926605+00:00"
 }
 ```
@@ -147,12 +147,32 @@ A decline is also `200` (`approved: false`, `responseCode: "05"`). Errors are Pr
 | 400 | `invalid_payload` | Not a five-part JWE, or unsupported `alg`/`enc`. |
 | 400 | `decryption_failed` | Encrypted for another key, or modified. |
 | 401 | | `X-Api-Key` missing or wrong. |
-| 422 | `invalid_payment_data` | Decrypted, but token/expiry/cryptogram invalid or expired. |
+| 422 | `invalid_payment_data` | Decrypted, but no token/card, invalid account number or expiry, expired, or missing cryptogram (token). |
 | 500 | `unexpected_error` | Anything else; details are never returned. |
 | 502 | `payment_processing_failed` | The processor could not give a result. |
 | 503 | `decryption_unavailable` | The Payload Encryption certificate cannot be loaded. |
 
-Only the token's last four digits are returned or logged.
+Only the last four digits of the token or PAN are returned or logged.
+
+**Decrypted payload formats.** The same request works with both Mastercard payloads; `credentialType` says which one
+arrived:
+
+| `credentialType` | Decrypted payload | `dynamicData.dynamicDataType` |
+|---|---|---|
+| `NetworkToken` | Tokenized DSRP: `token` (`paymentToken`, `tokenExpirationMonth/Year`) + cryptogram in `dynamicData.dynamicDataValue` | `CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM` |
+| `Pan` | DSRP + PAN: `card` (PAN) + **masked** `token` (`************9541`) + cryptogram | `CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM` |
+| `Pan` | PAN (token only markets): `card` + dynamic security code (DTVC, 3-4 digits) in `dynamicDataValue` | `DYNAMIC_CARD_SECURITY_CODE` |
+| `Pan` | FPAN: `card` only | `NONE` |
+
+`dynamicData.dynamicDataType` decides the model the payload is deserialized into
+(`DecryptedPayloadJsonConverter`): `TokenizedPayloadDto`, `DsrpPanPayloadDto` (same type, but with a `card`),
+`DynamicSecurityCodePayloadDto` or `FpanPayloadDto`. Common fields (addresses, consumer, `dynamicData`) live in the
+base `DecryptedPayloadDto`, `card` in `CardPayloadDto`. An unknown `dynamicDataType` is rejected as
+`invalid_payment_data`. In a DSRP + PAN payload an unmasked token (dual payload) is preferred over the card.
+To PowerTranz: the account number goes in `Source.CardPan`,
+the DTVC in `Source.CardCvv`, and the DSRP cryptogram/ECI in the fields set by `PowerTranz:CryptogramSourceField` /
+`EciSourceField`. The DTVC and the cryptogram are never logged or returned. An expired token or card returns
+`422 invalid_payment_data`.
 
 ## Tests
 
