@@ -10,8 +10,9 @@ public sealed class ClickToPayException(string message, Exception? inner = null)
 public sealed record ClickToPayPayment(CardOptions Card, SaleBillingAddress Billing, Dictionary<string, object> ExtraSourceFields);
 
 /// <summary>
-/// Calls MasterCard_ClickToPay_BE: /api/checkout/complete (Mastercard /checkout + decryption) and
-/// /api/checkout/confirmations, and maps the decrypted payload to the PowerTranz Sale request.
+/// Calls MasterCard_ClickToPay_BE: /api/checkout (Mastercard /checkout + decryption) and
+/// /api/checkout/confirmations (removed from the API until the new confirmation endpoint exists; the call is best effort
+/// and only logs a warning), and maps the decrypted payload to the PowerTranz Sale request.
 /// </summary>
 public sealed class ClickToPayService : IDisposable
 {
@@ -30,23 +31,44 @@ public sealed class ClickToPayService : IDisposable
         _httpClient.DefaultRequestHeaders.Add("X-Api-Key", options.ApiKey);
     }
 
-    public async Task<ClickToPayCompleteResult> CompleteAsync(ClickToPayCheckout checkout, decimal amount, string currency,
-        CancellationToken cancellationToken)
+    public bool SwaggerHandOff => _options.SwaggerHandOff;
+
+    // This demo runs PowerTranz SPI after /api/checkout, so it has no SpiToken yet: the API only requires one
+    // (it does not use it), so a placeholder is sent.
+    private const string DemoSpiToken = "poc-no-spi-token-yet";
+
+    private object CheckoutBody(ClickToPayCheckout checkout) => new
     {
-        Console.WriteLine($"POST {_httpClient.BaseAddress}api/checkout/complete");
-        Console.WriteLine($"  Body: correlationId={checkout.CorrelationId}, merchantTransactionId={SensitiveData.Mask(checkout.MerchantTransactionId)}, " +
-                          $"amount={amount:0.00} {currency}");
+        spiToken = DemoSpiToken,
+        srcDpaId = _options.SrcDpaId,
+        srcCorrelationId = checkout.CorrelationId,
+        merchantTransactionId = checkout.MerchantTransactionId,
+        flowId = checkout.FlowId,
+        xCorrelationId = Guid.NewGuid().ToString(),
+    };
+
+    /// <summary>Prints the POST /api/checkout body to copy into Swagger (identifiers only, no card data).</summary>
+    public void PrintSwaggerRequest(ClickToPayCheckout checkout)
+    {
+        var json = JsonSerializer.Serialize(CheckoutBody(checkout), new JsonSerializerOptions { WriteIndented = true });
+        Console.WriteLine();
+        Console.WriteLine("================ SWAGGER: POST /api/checkout ================");
+        Console.WriteLine($"URL:     {_httpClient.BaseAddress}swagger");
+        Console.WriteLine("Header:  X-Api-Key (Authorize button) = value of ClickToPay:ApiKey");
+        Console.WriteLine("Body:");
+        Console.WriteLine(json);
+        Console.WriteLine("Single use: Mastercard expires these identifiers after a few minutes.");
+        Console.WriteLine("==============================================================");
+    }
+
+    public async Task<ClickToPayCompleteResult> CompleteAsync(ClickToPayCheckout checkout, CancellationToken cancellationToken)
+    {
+        Console.WriteLine($"POST {_httpClient.BaseAddress}api/checkout");
+        Console.WriteLine($"  Body: srcCorrelationId={checkout.CorrelationId}, merchantTransactionId={SensitiveData.Mask(checkout.MerchantTransactionId)}, " +
+                          $"srcDpaId={_options.SrcDpaId}");
         Console.WriteLine("  (the API calls Mastercard POST /srci/api/checkout with OAuth 1.0a and decrypts encryptedPayload)");
 
-        var body = new
-        {
-            correlationId = checkout.CorrelationId,
-            merchantTransactionId = checkout.MerchantTransactionId,
-            flowId = checkout.FlowId,
-            transactionAmount = decimal.Round(amount, 2),
-            transactionCurrencyCode = currency,
-        };
-        var text = await PostAsync("api/checkout/complete", body, cancellationToken);
+        var text = await PostAsync("api/checkout", CheckoutBody(checkout), cancellationToken);
         try
         {
             return JsonSerializer.Deserialize<ClickToPayCompleteResult>(text)
@@ -128,26 +150,33 @@ public sealed class ClickToPayService : IDisposable
     }
 
     /// <summary>
-    /// Decrypted payload → PowerTranz Sale inputs. The network token goes in CardPan with the token expiry (YYMM)
-    /// and no CVV. The cryptogram and ECI are only added to Source under the field names configured in
-    /// ClickToPay:CryptogramSourceField / EciSourceField (pending confirmation in the PowerTranz SPI docs).
+    /// Decrypted payload → PowerTranz Sale inputs. The /api/checkout response always has payload.card (the PAN, or
+    /// the network token when Mastercard sent only a token): it goes in CardPan with its expiry (YYMM). A dynamic
+    /// security code (DYNAMIC_CARD_SECURITY_CODE) goes in CardCvv. A DSRP cryptogram and the ECI are only added to
+    /// Source under the field names configured in ClickToPay:CryptogramSourceField / EciSourceField (pending
+    /// confirmation in the PowerTranz SPI docs).
     /// </summary>
     public ClickToPayPayment Map(ClickToPayCompleteResult result)
     {
         var payload = result.Payload ?? throw new ClickToPayException("Click to Pay API returned no payload.");
         var token = payload.Token;
-        if (string.IsNullOrWhiteSpace(token?.PaymentToken))
-            throw new ClickToPayException("The decrypted payload has no payment token.");
+        var accountNumber = payload.Card?.PrimaryAccountNumber ?? token?.PaymentToken;
+        if (string.IsNullOrWhiteSpace(accountNumber))
+            throw new ClickToPayException("The decrypted payload has no card number (payload.card) nor payment token.");
 
-        var month = (token.TokenExpirationMonth ?? "").PadLeft(2, '0');
-        var year = token.TokenExpirationYear ?? "";
+        var fromCard = !string.IsNullOrWhiteSpace(payload.Card?.PrimaryAccountNumber);
+        var month = ((fromCard ? payload.Card!.PanExpirationMonth : token?.TokenExpirationMonth) ?? "").PadLeft(2, '0');
+        var year = (fromCard ? payload.Card!.PanExpirationYear : token?.TokenExpirationYear) ?? "";
         var expiration = (year.Length >= 2 ? year[^2..] : year) + month;
 
-        var name = token.CardholderFullName ?? payload.ConsumerFullName
+        var name = payload.Card?.CardholderFullName ?? token?.CardholderFullName ?? payload.ConsumerFullName
                    ?? $"{payload.ConsumerFirstName} {payload.ConsumerLastName}".Trim();
         var (firstName, lastName) = SplitName(payload.ConsumerFirstName, payload.ConsumerLastName, name);
 
-        var card = new CardOptions { Pan = token.PaymentToken, Expiration = expiration, Cvv = "", HolderName = name };
+        var dynamicType = payload.DynamicData?.DynamicDataType;
+        var dynamicValue = payload.DynamicData?.DynamicDataValue;
+        var securityCode = dynamicType == "DYNAMIC_CARD_SECURITY_CODE" ? dynamicValue ?? "" : "";
+        var card = new CardOptions { Pan = accountNumber, Expiration = expiration, Cvv = securityCode, HolderName = name };
 
         var address = payload.BillingAddress ?? payload.ShippingAddress;
         var phone = payload.ConsumerMobileNumber;
@@ -165,7 +194,7 @@ public sealed class ClickToPayService : IDisposable
             PhoneNumber = phone?.PhoneNumber is { } number ? $"{phone.CountryCode}{number}" : null,
         };
 
-        var cryptogram = payload.DynamicData?.DynamicDataValue;
+        var cryptogram = dynamicType == "CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM" ? dynamicValue : null;
         var extra = new Dictionary<string, object>();
         if (!string.IsNullOrWhiteSpace(_options.CryptogramSourceField) && !string.IsNullOrWhiteSpace(cryptogram))
             extra[_options.CryptogramSourceField] = cryptogram;
@@ -173,15 +202,18 @@ public sealed class ClickToPayService : IDisposable
             extra[_options.EciSourceField] = result.Eci;
 
         Console.WriteLine("Click to Pay payload decrypted:");
-        Console.WriteLine($"  Network token:  {SensitiveData.MaskPan(token.PaymentToken)}  Exp (YYMM): {expiration}");
-        Console.WriteLine($"  PAR:            {SensitiveData.Mask(token.PaymentAccountReference)}");
-        Console.WriteLine($"  Cryptogram:     {SensitiveData.Mask(cryptogram)} ({payload.DynamicData?.DynamicDataType})");
+        Console.WriteLine($"  Format:         credentialType={result.CredentialType ?? "-"}, dynamicDataType={dynamicType ?? "-"}");
+        Console.WriteLine($"  Card number:    {SensitiveData.MaskPan(accountNumber)}  Exp (YYMM): {expiration}" +
+                          (fromCard ? "  (payload.card)" : "  (payload.token)"));
+        Console.WriteLine($"  PAR:            {SensitiveData.Mask(payload.Card?.PaymentAccountReference ?? token?.PaymentAccountReference)}");
+        Console.WriteLine($"  Cryptogram:     {SensitiveData.Mask(cryptogram)}");
+        Console.WriteLine($"  Dynamic CVC:    {(string.IsNullOrEmpty(securityCode) ? "-" : "*** (sent as CardCvv)")}");
         Console.WriteLine($"  ECI:            {result.Eci ?? "-"}");
         Console.WriteLine($"  Cardholder:     {name}  Email: {payload.ConsumerEmailAddress ?? "-"}");
         Console.WriteLine($"  Billing:        {address?.City}, {address?.State} {address?.Zip} {address?.CountryCode}");
         Console.WriteLine(extra.Count == 0
             ? "  [warn] Cryptogram/ECI NOT sent to PowerTranz: set ClickToPay:CryptogramSourceField and EciSourceField " +
-              "from the PowerTranz SPI docs. The network token is sent as CardPan."
+              "from the PowerTranz SPI docs. The card number is sent as CardPan."
             : $"  => Sent in Source as: {string.Join(", ", extra.Keys)}");
 
         return new ClickToPayPayment(card, billing, extra);

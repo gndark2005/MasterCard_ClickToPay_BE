@@ -133,8 +133,17 @@ static async Task<PaymentOutcome> RunClickToPayPaymentAsync(PowerTranzService po
     try
     {
         Console.WriteLine();
+        clickToPay.PrintSwaggerRequest(checkout);
+        if (clickToPay.SwaggerHandOff)
+        {
+            Console.WriteLine("ClickToPay:SwaggerHandOff=true: /api/checkout and PowerTranz NOT called. Paste the body in Swagger.");
+            return new PaymentOutcome(OutcomeKind.Error, "Not paid: Swagger hand-off",
+                "The /api/checkout body was printed in the console. Paste it in Swagger within a few minutes.",
+                [new OutcomeDetail("correlationId", checkout.CorrelationId)]);
+        }
+
         Console.WriteLine("STEP 0/3 — Click to Pay: Mastercard /checkout and payload decryption (MasterCard_ClickToPay_BE)");
-        var result = await clickToPay.CompleteAsync(checkout, amount, currency, cancellationToken);
+        var result = await clickToPay.CompleteAsync(checkout, cancellationToken);
         payment = clickToPay.Map(result);
     }
     catch (ClickToPayException ex)

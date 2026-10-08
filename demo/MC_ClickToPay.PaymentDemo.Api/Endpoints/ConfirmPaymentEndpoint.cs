@@ -5,7 +5,7 @@ using MC_ClickToPay.Services.Payments;
 
 namespace MC_ClickToPay.PaymentDemo.Api.Endpoints;
 
-/// <summary>Demo copy of MC_ClickToPay.Api POST /api/payments/confirm: same shared flow, demo key provider.</summary>
+/// <summary>Demo: encrypted payload -> shared MC_ClickToPay.Services payment flow (simulated), with the demo key provider.</summary>
 public sealed class ConfirmPaymentEndpoint(
     PaymentConfirmationService confirmations, TimeProvider time, ILogger<ConfirmPaymentEndpoint> logger)
     : Endpoint<ConfirmPaymentRequest, ConfirmPaymentResponse>

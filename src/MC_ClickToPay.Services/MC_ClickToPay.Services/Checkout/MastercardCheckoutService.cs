@@ -34,16 +34,17 @@ public sealed class MastercardCheckoutService(
         var body = new JsonObject
         {
             ["srcDpaId"] = settings.SrcDpaId,
-            ["correlationId"] = request.CorrelationId,
+            ["correlationId"] = request.SrcCorrelationId,
             ["checkoutType"] = "CLICK_TO_PAY",
             ["checkoutReference"] = new JsonObject
             {
                 ["type"] = "MERCHANT_TRANSACTION_ID",
                 ["data"] = new JsonObject { ["merchantTransactionId"] = request.MerchantTransactionId },
             },
+
+            // No transactionAmount: the UI contract has no amount (checkoutWithCard() already received it).
             ["dpaTransactionOptions"] = new JsonObject
             {
-                ["transactionAmount"] = Amount(request.TransactionAmount, request.TransactionCurrencyCode),
                 ["paymentOptions"] = new JsonArray(new JsonObject { ["dynamicDataType"] = "CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM" }),
             },
         };

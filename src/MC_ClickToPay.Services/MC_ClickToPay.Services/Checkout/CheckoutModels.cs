@@ -3,25 +3,34 @@ using MC_ClickToPay.Services.Models;
 
 namespace MC_ClickToPay.Services.Checkout;
 
-/// <summary>Values the browser gets from checkoutWithCard() (checkoutResponseData and headers).</summary>
+/// <summary>
+/// What the UI sends after checkoutWithCard(): the Mastercard values (checkoutResponseData and headers) plus the
+/// PowerTranz SPI token of its payment. The SPI token is not used here (the UI calls PowerTranz itself with the
+/// decrypted card); it is accepted for traceability and is never logged.
+/// </summary>
 public sealed class CompleteCheckoutRequest
 {
-    [JsonPropertyName("correlationId")]
-    public string CorrelationId { get; init; } = string.Empty;
+    [JsonPropertyName("spiToken")]
+    public string SpiToken { get; init; } = string.Empty;
+
+    /// <summary>Must match the configured MastercardApi:SrcDpaId (the keys belong to that DPA).</summary>
+    [JsonPropertyName("srcDpaId")]
+    public string SrcDpaId { get; init; } = string.Empty;
+
+    /// <summary>checkoutResponseData.srcCorrelationId returned by checkoutWithCard().</summary>
+    [JsonPropertyName("srcCorrelationId")]
+    public string SrcCorrelationId { get; init; } = string.Empty;
 
     [JsonPropertyName("merchantTransactionId")]
     public string MerchantTransactionId { get; init; } = string.Empty;
 
-    /// <summary>Optional x-src-cx-flow-id header returned by checkoutWithCard().</summary>
+    /// <summary>x-src-cx-flow-id header returned by checkoutWithCard().</summary>
     [JsonPropertyName("flowId")]
-    public string? FlowId { get; init; }
+    public string FlowId { get; init; } = string.Empty;
 
-    [JsonPropertyName("transactionAmount")]
-    public decimal TransactionAmount { get; init; }
-
-    /// <summary>ISO 4217 alphabetic code, e.g. "USD".</summary>
-    [JsonPropertyName("transactionCurrencyCode")]
-    public string TransactionCurrencyCode { get; init; } = string.Empty;
+    /// <summary>The UI's own tracing id: logged and echoed in the X-Correlation-Id response header, not sent to Mastercard.</summary>
+    [JsonPropertyName("xCorrelationId")]
+    public string XCorrelationId { get; init; } = string.Empty;
 }
 
 public sealed class CompleteCheckoutResult

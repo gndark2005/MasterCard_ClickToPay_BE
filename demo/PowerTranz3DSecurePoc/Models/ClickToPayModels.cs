@@ -5,17 +5,22 @@ namespace PowerTranz3DSecurePoc.Models;
 /// <summary>What the Click to Pay page posts after checkoutWithCard() completes.</summary>
 public sealed record ClickToPayCheckout(string CorrelationId, string MerchantTransactionId, string? FlowId);
 
-// Response of MasterCard_ClickToPay_BE POST /api/checkout/complete (camelCase JSON).
+// Response of MasterCard_ClickToPay_BE POST /api/checkout (camelCase JSON).
 public sealed class ClickToPayCompleteResult
 {
     [JsonPropertyName("merchantTransactionId")] public string? MerchantTransactionId { get; set; }
     [JsonPropertyName("correlationId")] public string? CorrelationId { get; set; }
     [JsonPropertyName("eci")] public string? Eci { get; set; }
+    // "Pan": payload.card is the card Mastercard sent; "NetworkToken": payload.card was filled from the token.
+    [JsonPropertyName("credentialType")] public string? CredentialType { get; set; }
+    [JsonPropertyName("dynamicDataType")] public string? DynamicDataType { get; set; }
     [JsonPropertyName("payload")] public ClickToPayPayload? Payload { get; set; }
 }
 
 public sealed class ClickToPayPayload
 {
+    // Always present in the /api/checkout response.
+    [JsonPropertyName("card")] public ClickToPayCard? Card { get; set; }
     [JsonPropertyName("token")] public ClickToPayToken? Token { get; set; }
     [JsonPropertyName("dynamicData")] public ClickToPayDynamicData? DynamicData { get; set; }
     [JsonPropertyName("billingAddress")] public ClickToPayAddress? BillingAddress { get; set; }
@@ -25,6 +30,15 @@ public sealed class ClickToPayPayload
     [JsonPropertyName("consumerLastName")] public string? ConsumerLastName { get; set; }
     [JsonPropertyName("consumerFullName")] public string? ConsumerFullName { get; set; }
     [JsonPropertyName("consumerMobileNumber")] public ClickToPayPhone? ConsumerMobileNumber { get; set; }
+}
+
+public sealed class ClickToPayCard
+{
+    [JsonPropertyName("primaryAccountNumber")] public string? PrimaryAccountNumber { get; set; }
+    [JsonPropertyName("panExpirationMonth")] public string? PanExpirationMonth { get; set; }
+    [JsonPropertyName("panExpirationYear")] public string? PanExpirationYear { get; set; }
+    [JsonPropertyName("paymentAccountReference")] public string? PaymentAccountReference { get; set; }
+    [JsonPropertyName("cardholderFullName")] public string? CardholderFullName { get; set; }
 }
 
 public sealed class ClickToPayToken

@@ -35,14 +35,7 @@ public sealed class MastercardCheckoutServiceTests
         var handler = new FakeHandler(HttpStatusCode.OK,
             $$$"""{"merchantTransactionId":"mtid-1","correlationId":"corr-1","encryptedPayload":"{{{jwe}}}","assuranceData":{"eci":"06"}}""");
 
-        var result = await Service(handler, payloadKey).CompleteAsync(new CompleteCheckoutRequest
-        {
-            CorrelationId = "corr-1",
-            MerchantTransactionId = "mtid-1",
-            FlowId = "flow-1",
-            TransactionAmount = 31.25m,
-            TransactionCurrencyCode = "USD",
-        });
+        var result = await Service(handler, payloadKey).CompleteAsync(Request());
 
         Assert.Equal("06", result.Eci);
         var tokenized = Assert.IsType<TokenizedPayloadDto>(result.Payload);
@@ -63,8 +56,11 @@ public sealed class MastercardCheckoutServiceTests
         Assert.Equal("corr-1", body["correlationId"]!.GetValue<string>());
         Assert.Equal("CLICK_TO_PAY", body["checkoutType"]!.GetValue<string>());
         Assert.Equal("mtid-1", body["checkoutReference"]!["data"]!["merchantTransactionId"]!.GetValue<string>());
-        Assert.Equal("31.25", body["dpaTransactionOptions"]!["transactionAmount"]!["transactionAmount"]!.GetValue<string>());
-        Assert.Equal("USD", body["dpaTransactionOptions"]!["transactionAmount"]!["transactionCurrencyCode"]!.GetValue<string>());
+        Assert.Null(body["dpaTransactionOptions"]!["transactionAmount"]);
+        Assert.Equal("CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM",
+            body["dpaTransactionOptions"]!["paymentOptions"]![0]!["dynamicDataType"]!.GetValue<string>());
+        Assert.DoesNotContain("spi-token-1", request.Body);
+        Assert.DoesNotContain("x-corr-1", request.Body);
     }
 
     [Fact]
@@ -75,13 +71,7 @@ public sealed class MastercardCheckoutServiceTests
             """{"reason":"INVALID_ARGUMENT","message":"Invalid correlationId","secret":"5185600649952671"}""");
 
         var exception = await Assert.ThrowsAsync<MastercardCheckoutException>(() =>
-            Service(handler, payloadKey).CompleteAsync(new CompleteCheckoutRequest
-            {
-                CorrelationId = "corr-1",
-                MerchantTransactionId = "mtid-1",
-                TransactionAmount = 1m,
-                TransactionCurrencyCode = "USD",
-            }));
+            Service(handler, payloadKey).CompleteAsync(Request()));
 
         Assert.Equal(400, exception.StatusCode);
         Assert.Contains("INVALID_ARGUMENT", exception.Message);
@@ -109,6 +99,16 @@ public sealed class MastercardCheckoutServiceTests
         Assert.Equal("02", data["confirmationStatus"]!.GetValue<string>());
         Assert.Equal("31.25", data["transactionAmount"]!["transactionAmount"]!.GetValue<string>());
     }
+
+    private static CompleteCheckoutRequest Request() => new()
+    {
+        SpiToken = "spi-token-1",
+        SrcDpaId = Settings.SrcDpaId,
+        SrcCorrelationId = "corr-1",
+        MerchantTransactionId = "mtid-1",
+        FlowId = "flow-1",
+        XCorrelationId = "x-corr-1",
+    };
 
     private static MastercardCheckoutService Service(FakeHandler handler, RSA payloadKey) => new(
         new HttpClient(handler),

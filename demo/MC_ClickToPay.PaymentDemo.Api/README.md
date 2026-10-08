@@ -26,16 +26,16 @@ It lives in `demo/` and is independent of the rest of the repository:
   (`ClickToPayService.Map`).
 - Hands it to `IPaymentProcessor` and returns a confirmation.
 - The validation, mapping, simulated processor and confirmation service live in
-  `src/MC_ClickToPay.Services/.../Payments` and are shared with the real endpoint
-  `POST /api/payments/confirm` of `MC_ClickToPay.Api`. This demo only adds its own
-  key provider (development key) and the sample payload endpoint.
+  `src/MC_ClickToPay.Services/.../Payments`, ready for the upcoming confirmation
+  endpoint of `MC_ClickToPay.Api`. This demo only adds its own key provider
+  (development key) and the sample payload endpoint.
 
 **What it does NOT do**
 
 - It does not call PowerTranz and no money moves. The processor is
   **simulated**, and every response says `"simulated": true`.
 - It does not call Mastercard `/checkout`. That remains the job of
-  `MC_ClickToPay.Api` (`POST /api/checkout/complete`).
+  `MC_ClickToPay.Api` (`POST /api/checkout`).
 - It does not verify the outer Checkout JWS signature. As in `MC_ClickToPay.Api`,
   the input is only the `encryptedPayload`.
 

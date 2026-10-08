@@ -2,24 +2,25 @@
 @apiKey = clicktopay-dev-key
 @encryptedPayload = replace-with-five-part-jwe
 
-### Decrypt the encryptedPayload extracted from a verified Checkout response
+### Checkout: what the front gets from checkoutWithCard() -> Mastercard /checkout -> decrypted payload (always with card)
+POST {{baseUrl}}/api/checkout
+Content-Type: application/json
+X-Api-Key: {{apiKey}}
+
+{
+  "spiToken": "<PowerTranz SpiToken>",
+  "srcDpaId": "823ef281-1a2e-4204-a69c-43d355522a35",
+  "srcCorrelationId": "<checkoutResponseData.srcCorrelationId>",
+  "merchantTransactionId": "<headers[merchant-transaction-id]>",
+  "flowId": "<headers[x-src-cx-flow-id]>",
+  "xCorrelationId": "7d1f6c2e-9a43-4b8e-b1a2-3f5c8e0d4a17"
+}
+
+### Decrypt an encryptedPayload directly (debugging)
 POST {{baseUrl}}/api/payloads/decrypt
 Content-Type: application/json
 X-Api-Key: {{apiKey}}
 
 {
   "encryptedPayload": "{{encryptedPayload}}"
-}
-
-### Confirm a payment from the encryptedPayload (simulated processor until PowerTranz is plugged in)
-POST {{baseUrl}}/api/payments/confirm
-Content-Type: application/json
-X-Api-Key: {{apiKey}}
-
-{
-  "encryptedPayload": "{{encryptedPayload}}",
-  "transactionAmount": 31.25,
-  "transactionCurrencyCode": "USD",
-  "orderId": "ORDER-5",
-  "eci": "06"
 }

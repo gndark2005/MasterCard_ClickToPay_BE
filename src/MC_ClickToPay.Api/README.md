@@ -65,9 +65,8 @@ validates them at startup and refuses to start, naming each missing key (`Config
 | `Authentication:ApiKey` | `X-Api-Key` expected from callers. |
 | `PayloadEncryption:CertificatePath` | Payload Encryption private key: `.pem` as Mastercard provides it, or `.p12/.pfx` (+ `CertificatePassword` if it has one). |
 
-Optional until the full Mastercard → PowerTranz flow is used (`/api/checkout/complete` and `/confirmations` return
-HTTP 502/503 without them): `MastercardApi:BaseUrl`, `SrcDpaId`, `ConsumerKey` (`clientId!keyId`),
-`SigningKeyPath` (`.pem`, or `.p12/.pfx` with `SigningKeyPassword`).
+Needed by `POST /api/checkout` (it returns HTTP 502/503 without them): `MastercardApi:BaseUrl`, `SrcDpaId`,
+`ConsumerKey` (`clientId!keyId`), `SigningKeyPath` (`.pem`, or `.p12/.pfx` with `SigningKeyPassword`).
 
 A configured file that cannot be read (wrong path or password) still starts the API and returns HTTP 503 on use,
 without exposing the path or password.
@@ -87,99 +86,99 @@ Without a configured certificate, a supported JWE receives HTTP 503.
 Missing or incorrect API keys receive HTTP 401.
 Request validation and decryption errors receive HTTP 400.
 
-## Payment confirmation
+## Checkout
 
-`POST /api/payments/confirm` takes the `encryptedPayload` returned by Mastercard `/checkout`, decrypts it with the
-Payload Encryption key, validates and maps the payment data, and hands it to the payment processor.
+`POST /api/checkout` receives what the front gets from Click to Pay `checkoutWithCard()`, calls Mastercard
+`POST /srci/api/checkout` (OAuth 1.0a), decrypts the `encryptedPayload` and returns the decrypted body, **always with a
+`card` object**. There is no PowerTranz call here: with the clear card data, the UI calls PowerTranz SPI itself.
 
 ```
-checkoutWithCard() (browser) -> POST /api/checkout/complete -> encryptedPayload + eci
-  -> POST /api/payments/confirm -> decrypt -> validate/map -> IPaymentProcessor -> confirmation
-  -> POST /api/checkout/confirmations (report the result to Mastercard)
+UI: init() -> getCards()/authenticate() -> checkoutWithCard()
+  -> POST /api/checkout { spiToken, srcDpaId, srcCorrelationId, merchantTransactionId, flowId, xCorrelationId }
+     -> Mastercard POST /srci/api/checkout -> encryptedPayload + assuranceData.eci
+     -> decrypt (Payload Encryption private key) -> model by dynamicData.dynamicDataType
+  <- { credentialType, dynamicDataType, eci, payload (with card) }
+UI: PowerTranz /api/spi/... with the clear card data
 ```
-
-The processor is **simulated** (`SimulatedPaymentProcessor`) until a test card can complete the Mastercard ->
-PowerTranz flow: no money moves and every response has `"simulated": true`. Its outcome comes from
-`PaymentSimulation:Outcome` (`Approved`, `Declined` or `Failure`), read on every request.
-
-The flow lives in `MC_ClickToPay.Services/Payments` and is shared with the payment demo
-(`demo/MC_ClickToPay.PaymentDemo.Api`). PowerTranz plugs in as another `IPaymentProcessor` registered in
-`Program.cs`; see the demo README, "Future PowerTranz integration".
 
 Headers: `Content-Type: application/json`, `X-Api-Key: <Authentication:ApiKey>`.
 
-| Field | Required | Rules |
+| Field | Required | Source |
 |---|---|---|
-| `encryptedPayload` | yes | Five-part compact JWE, RSA-OAEP-256 / A128CBC-HS256 (Mastercard `/checkout` `encryptedPayload`). |
-| `transactionAmount` | yes | Greater than 0, at most 1000000, at most 2 decimals. Same amount sent to Mastercard. |
-| `transactionCurrencyCode` | yes | ISO 4217: `USD` (Mastercard) or `840` (PowerTranz). |
-| `orderId` | no | 1 to 50 letters, digits, `-` or `_`. Generated (`ORD-...`) when omitted. |
-| `eci` | no | 2 digits: `assuranceData.eci` of the `/checkout` response (it is not inside the payload). |
+| `spiToken` | yes, max 2048 | PowerTranz SPI token of the UI's payment. Not used by this API (traceability only) and never logged. |
+| `srcDpaId` | yes | Must equal `MastercardApi:SrcDpaId`, otherwise 400. |
+| `srcCorrelationId` | yes | `checkoutWithCard()`: `checkoutResponseData.srcCorrelationId` |
+| `merchantTransactionId` | yes | `checkoutWithCard()`: `headers["merchant-transaction-id"]` |
+| `flowId` | yes | `checkoutWithCard()`: `headers["x-src-cx-flow-id"]` |
+| `xCorrelationId` | yes, max 256, visible ASCII | The UI's tracing id. Logged and returned in the `X-Correlation-Id` response header; not sent to Mastercard. |
+
+All ids are single use and expire a few minutes after `checkoutWithCard()`.
 
 ```json
 {
-  "encryptedPayload": "eyJraWQiOiJwYXlsb2FkX2VuY19jZXJ0IiwiZW5jIjoiQTEyOENCQy1IUzI1NiIsImFsZyI6IlJTQS1PQUVQLTI1NiJ9.<key>.<iv>.<ciphertext>.<tag>",
-  "transactionAmount": 31.25,
-  "transactionCurrencyCode": "USD",
-  "orderId": "ORDER-5",
-  "eci": "06"
+  "spiToken": "<PowerTranz SpiToken>",
+  "srcDpaId": "823ef281-1a2e-4204-a69c-43d355522a35",
+  "srcCorrelationId": "34f4a04b.2ce61515-55b7-4c09-845b-45492c2ef327",
+  "merchantTransactionId": "0a4e0d3.34f4a04b.f91587770b3c99ce1090fe8a4f2a931b10d7acfc",
+  "flowId": "34f4a04b.2ce61515-55b7-4c09-845b-45492c2ef327.1790888627",
+  "xCorrelationId": "7d1f6c2e-9a43-4b8e-b1a2-3f5c8e0d4a17"
 }
 ```
 
-`200 OK` (real Mastercard sandbox payload, 2026-10-05):
+`200 OK` (DSRP + PAN payload):
 
 ```json
 {
-  "status": "Approved", "approved": true, "simulated": true, "processor": "Simulated",
-  "orderId": "ORDER-5", "transactionId": "5d13b388-211c-4f77-8752-453b7f3d6f1e",
-  "authorizationCode": "464006", "responseCode": "00", "responseMessage": "Approved (simulated)",
-  "transactionAmount": 31.25, "transactionCurrencyCode": "USD", "credentialType": "NetworkToken", "last4": "2671", "eci": "06",
-  "processedAt": "2026-10-05T17:15:53.3926605+00:00"
+  "merchantTransactionId": "0a4e0d3.34f4a04b.f91587770b3c99ce1090fe8a4f2a931b10d7acfc",
+  "correlationId": "34f4a04b.2ce61515-55b7-4c09-845b-45492c2ef327",
+  "eci": "06",
+  "credentialType": "Pan",
+  "dynamicDataType": "CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM",
+  "payload": {
+    "card": { "primaryAccountNumber": "5120350100064537", "panExpirationMonth": "07", "panExpirationYear": "2029", "cardholderFullName": "John Doe" },
+    "token": { "paymentToken": "************9541", "tokenExpirationMonth": "08", "tokenExpirationYear": "2027" },
+    "dynamicData": { "dynamicDataValue": "AH14E2rQmy6mABQkMkPpAAADFA==", "dynamicDataType": "CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM" },
+    "billingAddress": { "line1": "150 5th Avenue", "city": "New York", "state": "NY", "countryCode": "US", "zip": "10011" },
+    "consumerEmailAddress": "john.doe@mastercard.com",
+    "consumerMobileNumber": { "countryCode": "44", "phoneNumber": "7966778607" }
+  }
 }
 ```
 
-A decline is also `200` (`approved: false`, `responseCode: "05"`). Errors are Problem Details with a `code`:
+**Decrypted payload formats.** `dynamicData.dynamicDataType` is what we request in `paymentOptions`
+(`init()`, `checkoutWithCard()` and `/srci/api/checkout`; today `CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM`); whether the
+card (PAN) comes depends on how Mastercard configured the DPA (FPAN / dual payload).
 
-| Status | `code` | When |
-|---|---|---|
-| 400 | `missing_payload` | `encryptedPayload` missing or blank. |
-| 400 | `invalid_request` | Amount, currency, order id or eci invalid (`errors` lists the rules). |
-| 400 | `invalid_payload` | Not a five-part JWE, or unsupported `alg`/`enc`. |
-| 400 | `decryption_failed` | Encrypted for another key, or modified. |
-| 401 | | `X-Api-Key` missing or wrong. |
-| 422 | `invalid_payment_data` | Decrypted, but no token/card, invalid account number or expiry, expired, or missing cryptogram (token). |
-| 500 | `unexpected_error` | Anything else; details are never returned. |
-| 502 | `payment_processing_failed` | The processor could not give a result. |
-| 503 | `decryption_unavailable` | The Payload Encryption certificate cannot be loaded. |
+| Format | Decrypted payload | `dynamicDataType` | `credentialType` / `payload.card` |
+|---|---|---|---|
+| FPAN | `card` only | `NONE` | `Pan` / the PAN |
+| DSRP + PAN | `card` (PAN) + masked `token` + cryptogram | `CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM` | `Pan` / the PAN |
+| PAN + DTVC | `card` + dynamic security code | `DYNAMIC_CARD_SECURITY_CODE` | `Pan` / the PAN |
+| Token only | `token` + cryptogram | `CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM` | `NetworkToken` / filled from the token (not the real PAN) |
 
-Only the last four digits of the token or PAN are returned or logged.
+The agreed formats are FPAN and DSRP + PAN. `dynamicData.dynamicDataType` decides the model the payload is
+deserialized into (`DecryptedPayloadJsonConverter`): `TokenizedPayloadDto`, `DsrpPanPayloadDto` (same type, with a
+`card`), `DynamicSecurityCodePayloadDto` or `FpanPayloadDto`. Common fields (addresses, consumer, `dynamicData`) live
+in the base `DecryptedPayloadDto`, `card` in `CardPayloadDto`; the response model is `CheckoutPanPayloadDto`.
 
-**Decrypted payload formats.** The same request works with both Mastercard payloads; `credentialType` says which one
-arrived:
+**The response carries full card data** (PAN or token, cryptogram/DTVC): it is meant for the UI's PowerTranz SPI
+request only, is never logged, and must not be cached or stored by the caller.
 
-| `credentialType` | Decrypted payload | `dynamicData.dynamicDataType` |
-|---|---|---|
-| `NetworkToken` | Tokenized DSRP: `token` (`paymentToken`, `tokenExpirationMonth/Year`) + cryptogram in `dynamicData.dynamicDataValue` | `CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM` |
-| `Pan` | DSRP + PAN: `card` (PAN) + **masked** `token` (`************9541`) + cryptogram | `CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM` |
-| `Pan` | PAN (token only markets): `card` + dynamic security code (DTVC, 3-4 digits) in `dynamicDataValue` | `DYNAMIC_CARD_SECURITY_CODE` |
-| `Pan` | FPAN: `card` only | `NONE` |
+| Status | When |
+|---|---|
+| 400 | Invalid request (missing fields, `srcDpaId` of another DPA) or invalid encrypted payload. |
+| 401 | `X-Api-Key` missing or wrong. |
+| 502 | Mastercard rejected the call or could not be reached (e.g. expired ids, invalid signature); its reason code is included. |
+| 503 | Signing key or Payload Encryption key not configured or unreadable. |
 
-`dynamicData.dynamicDataType` decides the model the payload is deserialized into
-(`DecryptedPayloadJsonConverter`): `TokenizedPayloadDto`, `DsrpPanPayloadDto` (same type, but with a `card`),
-`DynamicSecurityCodePayloadDto` or `FpanPayloadDto`. Common fields (addresses, consumer, `dynamicData`) live in the
-base `DecryptedPayloadDto`, `card` in `CardPayloadDto`. An unknown `dynamicDataType` is rejected as
-`invalid_payment_data`. In a DSRP + PAN payload an unmasked token (dual payload) is preferred over the card.
-To PowerTranz: the account number goes in `Source.CardPan`,
-the DTVC in `Source.CardCvv`, and the DSRP cryptogram/ECI in the fields set by `PowerTranz:CryptogramSourceField` /
-`EciSourceField`. The DTVC and the cryptogram are never logged or returned. An expired token or card returns
-`422 invalid_payment_data`.
-
+The payment flow (validation, PowerTranz/simulated processor) stays in `MC_ClickToPay.Services/Payments` for the
+upcoming confirmation endpoint; `IMastercardCheckoutService.ConfirmAsync` (Mastercard `/checkout/confirmations`) too.
 ## Tests
 
 ```powershell
 dotnet test src/MC_ClickToPay.Services.slnx
 ```
 
-HTTP tests use a temporary certificate and verify decryption, payment confirmation, API-key access, error handling
+HTTP tests use a temporary certificate and verify decryption, the checkout response for every payload format, API-key access, error handling
 and Swagger. A real Mastercard sandbox `encryptedPayload` (DPA `823ef281-...`) was decrypted and confirmed locally
 on 2026-10-05 with the project's Payload Encryption key configured through User Secrets.

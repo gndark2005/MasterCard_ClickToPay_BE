@@ -41,8 +41,8 @@ builder.Services.AddRequiredSettings(builder.Configuration);
 builder.Services.AddMastercardPayloadDecryption<CertificatePayloadDecryptionKeyProvider>();
 builder.Services.AddMastercardCheckout<CertificateSigningKeyProvider>();
 
-// POST /api/payments/confirm: decrypt -> validate/map -> IPaymentProcessor. PowerTranz when its credentials are
-// configured (PowerTranz section); otherwise the simulated processor.
+// Payment flow (decrypt -> validate/map -> IPaymentProcessor), kept registered for the upcoming confirmation
+// endpoint: PowerTranz when its credentials are configured (PowerTranz section); otherwise the simulated processor.
 var powerTranz = builder.Configuration.GetSection(PowerTranzOptions.SectionName).Get<PowerTranzOptions>();
 if (powerTranz?.IsConfigured == true)
 {

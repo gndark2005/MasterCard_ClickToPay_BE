@@ -28,11 +28,11 @@ public static class RequiredSettings
                 "used to decrypt encryptedPayload.")
             .ValidateOnStart();
 
-        // Optional until the full Mastercard → PowerTranz flow is used (/api/checkout/complete and /confirmations).
+        // Required by POST /api/checkout (Mastercard /checkout); optional for payload decryption alone.
         services.Configure<MastercardCheckoutOptions>(configuration.GetSection("MastercardApi"));
         services.Configure<MastercardSigningKeyOptions>(configuration.GetSection("MastercardApi"));
 
-        // Optional: outcome of the simulated processor behind POST /api/payments/confirm (default Approved).
+        // Optional: outcome of the simulated payment processor (default Approved), for the upcoming confirmation endpoint.
         services.Configure<PaymentSimulationOptions>(configuration.GetSection("PaymentSimulation"));
 
         // Optional: with PowerTranzId/PowerTranzPassword set, PowerTranz replaces the simulated processor.

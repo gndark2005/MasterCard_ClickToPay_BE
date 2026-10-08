@@ -40,6 +40,12 @@ public sealed class ClickToPayOptions
     public string CryptogramSourceField { get; set; } = "";
     public string EciSourceField { get; set; } = "";
 
+    /// <summary>
+    /// Testing aid: prints the POST /api/checkout body (ready for Swagger) and stops there, without calling the API
+    /// or PowerTranz, so the single-use Mastercard identifiers are still unused when pasted in Swagger.
+    /// </summary>
+    public bool SwaggerHandOff { get; set; }
+
     public IEnumerable<string> GetMissingSettings()
     {
         if (!Enabled) yield break;
