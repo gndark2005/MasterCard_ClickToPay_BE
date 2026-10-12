@@ -65,7 +65,7 @@ validates them at startup and refuses to start, naming each missing key (`Config
 | `Authentication:ApiKey` | `X-Api-Key` expected from callers. |
 | `PayloadEncryption:CertificatePath` | Payload Encryption private key: `.pem` as Mastercard provides it, or `.p12/.pfx` (+ `CertificatePassword` if it has one). |
 
-Needed by `POST /api/checkout` (it returns HTTP 502/503 without them): `MastercardApi:BaseUrl`, `SrcDpaId`,
+Needed by `POST /api/checkout` (it returns HTTP 502/503 without them): `MastercardApi:BaseUrl`,
 `ConsumerKey` (`clientId!keyId`), `SigningKeyPath` (`.pem`, or `.p12/.pfx` with `SigningKeyPassword`).
 
 A configured file that cannot be read (wrong path or password) still starts the API and returns HTTP 503 on use,
@@ -88,17 +88,18 @@ Request validation and decryption errors receive HTTP 400.
 
 ## Checkout
 
-`POST /api/checkout` receives what the front gets from Click to Pay `checkoutWithCard()`, calls Mastercard
-`POST /srci/api/checkout` (OAuth 1.0a), decrypts the `encryptedPayload` and returns the decrypted body, **always with a
-`card` object**. There is no PowerTranz call here: with the clear card data, the UI calls PowerTranz SPI itself.
+`POST /api/checkout` receives what the UI gets from Click to Pay `checkoutWithCard()`, calls Mastercard
+`POST /srci/api/checkout` (OAuth 1.0a), decrypts the `encryptedPayload` and returns the card and addresses as **flat
+fields** for the UI's PowerTranz SPI request. There is no PowerTranz call here.
 
 ```
 UI: init() -> getCards()/authenticate() -> checkoutWithCard()
-  -> POST /api/checkout { spiToken, srcDpaId, srcCorrelationId, merchantTransactionId, flowId, xCorrelationId }
-     -> Mastercard POST /srci/api/checkout -> encryptedPayload + assuranceData.eci
+  -> POST /api/checkout { spiToken, srcDpaId, srcCorrelationId, merchantTransactionId, flowId,
+                          transactionAmount, transactionCurrencyCode, xCorrelationId }
+     -> Mastercard POST /srci/api/checkout -> encryptedPayload
      -> decrypt (Payload Encryption private key) -> model by dynamicData.dynamicDataType
-  <- { credentialType, dynamicDataType, eci, payload (with card) }
-UI: PowerTranz /api/spi/... with the clear card data
+  <- { cardNo, cardExpDate, cardCVV2, cardholderName, billTo*, shipTo* }
+UI: PowerTranz /api/spi/... with the non-null fields
 ```
 
 Headers: `Content-Type: application/json`, `X-Api-Key: <Authentication:ApiKey>`.
@@ -106,10 +107,12 @@ Headers: `Content-Type: application/json`, `X-Api-Key: <Authentication:ApiKey>`.
 | Field | Required | Source |
 |---|---|---|
 | `spiToken` | yes, max 2048 | PowerTranz SPI token of the UI's payment. Not used by this API (traceability only) and never logged. |
-| `srcDpaId` | yes | Must equal `MastercardApi:SrcDpaId`, otherwise 400. |
+| `srcDpaId` | yes, max 256 | The merchant's DPA (varies per merchant); sent as is to Mastercard `/checkout`. Mastercard is expected to reject a DPA outside our integrator credentials (502; not yet verified). |
 | `srcCorrelationId` | yes | `checkoutWithCard()`: `checkoutResponseData.srcCorrelationId` |
 | `merchantTransactionId` | yes | `checkoutWithCard()`: `headers["merchant-transaction-id"]` |
 | `flowId` | yes | `checkoutWithCard()`: `headers["x-src-cx-flow-id"]` |
+| `transactionAmount` | yes, > 0, max 2 decimals | Order amount, the same one given to `checkoutWithCard()`. Sent to Mastercard `/checkout`. |
+| `transactionCurrencyCode` | yes | ISO 4217 alphabetic code, 3 uppercase letters (e.g. `USD`). Sent to Mastercard `/checkout`. |
 | `xCorrelationId` | yes, max 256, visible ASCII | The UI's tracing id. Logged and returned in the `X-Correlation-Id` response header; not sent to Mastercard. |
 
 All ids are single use and expire a few minutes after `checkoutWithCard()`.
@@ -121,52 +124,78 @@ All ids are single use and expire a few minutes after `checkoutWithCard()`.
   "srcCorrelationId": "34f4a04b.2ce61515-55b7-4c09-845b-45492c2ef327",
   "merchantTransactionId": "0a4e0d3.34f4a04b.f91587770b3c99ce1090fe8a4f2a931b10d7acfc",
   "flowId": "34f4a04b.2ce61515-55b7-4c09-845b-45492c2ef327.1790888627",
+  "transactionAmount": 31.25,
+  "transactionCurrencyCode": "USD",
   "xCorrelationId": "7d1f6c2e-9a43-4b8e-b1a2-3f5c8e0d4a17"
 }
 ```
 
-`200 OK` (DSRP + PAN payload):
+`200 OK` (DSRP + PAN payload; header `X-Correlation-Id` = the request's `xCorrelationId`). `cardNo` and `cardExpDate`
+are always set; every other field is `null` when Mastercard did not send it, and the UI drops null fields before
+calling PowerTranz.
 
 ```json
 {
-  "merchantTransactionId": "0a4e0d3.34f4a04b.f91587770b3c99ce1090fe8a4f2a931b10d7acfc",
-  "correlationId": "34f4a04b.2ce61515-55b7-4c09-845b-45492c2ef327",
-  "eci": "06",
-  "credentialType": "Pan",
-  "dynamicDataType": "CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM",
-  "payload": {
-    "card": { "primaryAccountNumber": "5120350100064537", "panExpirationMonth": "07", "panExpirationYear": "2029", "cardholderFullName": "John Doe" },
-    "token": { "paymentToken": "************9541", "tokenExpirationMonth": "08", "tokenExpirationYear": "2027" },
-    "dynamicData": { "dynamicDataValue": "AH14E2rQmy6mABQkMkPpAAADFA==", "dynamicDataType": "CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM" },
-    "billingAddress": { "line1": "150 5th Avenue", "city": "New York", "state": "NY", "countryCode": "US", "zip": "10011" },
-    "consumerEmailAddress": "john.doe@mastercard.com",
-    "consumerMobileNumber": { "countryCode": "44", "phoneNumber": "7966778607" }
-  }
+  "cardNo": "5120350100064537",
+  "cardExpDate": "2907",
+  "cardCVV2": null,
+  "cardholderName": "John Doe",
+  "billToFirstName": "John",
+  "billToLastName": "Doe",
+  "billToAddress1": "150 5th Avenue",
+  "billToAddress2": null,
+  "billToState": "NY",
+  "billToPostCode": "10011",
+  "billToCountry": "US",
+  "billToTelephone": "12125550100",
+  "billToEmail": "john.doe@example.com",
+  "shipToFirstName": "John",
+  "shipToLastName": "Doe",
+  "shipToAddress1": "150 5th Avenue",
+  "shipToAddress2": null,
+  "shipToState": "NY",
+  "shipToPostCode": "10011",
+  "shipToCountry": "US",
+  "shipToTelephone": "12125550100",
+  "shipToEmail": "john.doe@example.com"
 }
 ```
 
+| Field | Source in the decrypted payload |
+|---|---|
+| `cardNo` | `card.primaryAccountNumber`; the network token (`token.paymentToken`) when Mastercard sent only a token |
+| `cardExpDate` | YYMM from the card (or token) expiry month/year |
+| `cardCVV2` | `dynamicData.dynamicDataValue` only when `dynamicDataType` is `DYNAMIC_CARD_SECURITY_CODE` |
+| `cardholderName` | `card.cardholderFullName`, else the token's, else the consumer's name |
+| `billTo/shipToFirstName`, `LastName` | Address `name` split at the last space; else `consumerFirstName` / `consumerLastName` |
+| `billTo/shipToAddress1`, `Address2`, `State`, `PostCode`, `Country` | Address `line1`, `line2`, `state`, `zip`, `countryCode` (ISO alpha-2) |
+| `billTo/shipToTelephone` | `consumerMobileNumber`: country code + number, digits only (shipTo only when there is a shipping address) |
+| `billTo/shipToEmail` | `consumerEmailAddress` (shipTo only when there is a shipping address) |
+
+The address `city` is not in the agreed response. The cryptogram, ECI and token are not returned either.
+A payload without a card number or expiry gets 502.
 **Decrypted payload formats.** `dynamicData.dynamicDataType` is what we request in `paymentOptions`
 (`init()`, `checkoutWithCard()` and `/srci/api/checkout`; today `CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM`); whether the
 card (PAN) comes depends on how Mastercard configured the DPA (FPAN / dual payload).
 
-| Format | Decrypted payload | `dynamicDataType` | `credentialType` / `payload.card` |
+| Format | Decrypted payload | `dynamicDataType` | `cardNo` / `cardCVV2` |
 |---|---|---|---|
-| FPAN | `card` only | `NONE` | `Pan` / the PAN |
-| DSRP + PAN | `card` (PAN) + masked `token` + cryptogram | `CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM` | `Pan` / the PAN |
-| PAN + DTVC | `card` + dynamic security code | `DYNAMIC_CARD_SECURITY_CODE` | `Pan` / the PAN |
-| Token only | `token` + cryptogram | `CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM` | `NetworkToken` / filled from the token (not the real PAN) |
+| FPAN | `card` only | `NONE` | the PAN / null |
+| DSRP + PAN | `card` (PAN) + masked `token` + cryptogram | `CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM` | the PAN / null |
+| PAN + DTVC | `card` + dynamic security code | `DYNAMIC_CARD_SECURITY_CODE` | the PAN / the dynamic code |
+| Token only | `token` + cryptogram | `CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM` | the token number (not the real PAN) / null |
 
 The agreed formats are FPAN and DSRP + PAN. `dynamicData.dynamicDataType` decides the model the payload is
 deserialized into (`DecryptedPayloadJsonConverter`): `TokenizedPayloadDto`, `DsrpPanPayloadDto` (same type, with a
 `card`), `DynamicSecurityCodePayloadDto` or `FpanPayloadDto`. Common fields (addresses, consumer, `dynamicData`) live
-in the base `DecryptedPayloadDto`, `card` in `CardPayloadDto`; the response model is `CheckoutPanPayloadDto`.
+in the base `DecryptedPayloadDto`, `card` in `CardPayloadDto`; `CheckoutPanPayloadDto` fills `card` from the token when needed and `CompleteCheckoutResponse` flattens it.
 
-**The response carries full card data** (PAN or token, cryptogram/DTVC): it is meant for the UI's PowerTranz SPI
+**The response carries full card data** (PAN or token, DTVC): it is meant for the UI's PowerTranz SPI
 request only, is never logged, and must not be cached or stored by the caller.
 
 | Status | When |
 |---|---|
-| 400 | Invalid request (missing fields, `srcDpaId` of another DPA) or invalid encrypted payload. |
+| 400 | Invalid request (missing or invalid fields) or invalid encrypted payload. |
 | 401 | `X-Api-Key` missing or wrong. |
 | 502 | Mastercard rejected the call or could not be reached (e.g. expired ids, invalid signature); its reason code is included. |
 | 503 | Signing key or Payload Encryption key not configured or unreadable. |

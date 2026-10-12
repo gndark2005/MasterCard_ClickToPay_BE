@@ -4,7 +4,6 @@ using MC_ClickToPay.Api.Keys;
 using MC_ClickToPay.Services.Abstractions;
 using MC_ClickToPay.Services.Checkout;
 using MC_ClickToPay.Services.Exceptions;
-using Microsoft.Extensions.Options;
 
 namespace MC_ClickToPay.Api.Endpoints.Checkout;
 
@@ -19,11 +18,11 @@ public sealed class CompleteCheckoutEndpoint(IMastercardCheckoutService checkout
             s.Summary = "Complete a Click to Pay checkout";
             s.Description = "Takes the srcCorrelationId, merchant-transaction-id and x-src-cx-flow-id returned by " +
                 "checkoutWithCard(), calls Mastercard POST /srci/api/checkout (OAuth 1.0a) and decrypts the " +
-                "encryptedPayload. Returns the decrypted payload always with a card object: the PAN when Mastercard " +
-                "sent one (credentialType Pan), otherwise the network token in card.primaryAccountNumber " +
-                "(credentialType NetworkToken). The token, cryptogram/DTVC, addresses and the ECI are included. " +
-                "No PowerTranz call is made: the UI sends the card to PowerTranz SPI itself. srcDpaId must match " +
-                "the configured DPA.";
+                "encryptedPayload. Returns flat card and bill-to/ship-to fields for the UI's PowerTranz SPI request: " +
+                "cardNo (the PAN, or the network token when Mastercard sent only a token) and cardExpDate (YYMM) " +
+                "are always set; every other field is null when Mastercard did not send it. cardCVV2 is the dynamic " +
+                "security code of DYNAMIC_CARD_SECURITY_CODE payloads. No PowerTranz call is made. srcDpaId is the " +
+                "merchant's DPA and is sent as is to Mastercard.";
             s.ExampleRequest = new CompleteCheckoutRequest
             {
                 SpiToken = "<PowerTranz SpiToken>",
@@ -31,12 +30,14 @@ public sealed class CompleteCheckoutEndpoint(IMastercardCheckoutService checkout
                 SrcCorrelationId = "34f4a04b.2ce61515-55b7-4c09-845b-45492c2ef327",
                 MerchantTransactionId = "0a4e0d3.34f4a04b.f91587770b3c99ce1090fe8a4f2a931b10d7acfc",
                 FlowId = "34f4a04b.2ce61515-55b7-4c09-845b-45492c2ef327.1790888627",
+                TransactionAmount = 31.25m,
+                TransactionCurrencyCode = "USD",
                 XCorrelationId = "7d1f6c2e-9a43-4b8e-b1a2-3f5c8e0d4a17"
             };
-            s.Response<CompleteCheckoutResponse>(200, "Decrypted payload with card, credentialType and ECI.");
+            s.Response<CompleteCheckoutResponse>(200, "Card and bill-to/ship-to fields; null when not sent by Mastercard.");
             s.Response(400, "Invalid request or invalid encrypted payload.");
             s.Response(401, "API key is missing, incorrect or not configured.");
-            s.Response(502, "Mastercard rejected the call or could not be reached.");
+            s.Response(502, "Mastercard rejected the call, could not be reached, or returned no card number/expiry.");
             s.Response(503, "Signing key or decryption certificate is not configured or unavailable.");
         });
     }
@@ -48,13 +49,14 @@ public sealed class CompleteCheckoutEndpoint(IMastercardCheckoutService checkout
         try
         {
             var result = await checkout.CompleteAsync(request, ct);
-            var response = CompleteCheckoutResponse.From(result);
+            var payload = CheckoutPanPayloadDto.From(result.Payload);
 
             // Format only: never card numbers, cryptograms or security codes.
             logger.LogInformation(
                 "Checkout {CorrelationId} (x-correlation-id {XCorrelationId}): decrypted {PayloadModel} (credentialType {CredentialType}, dynamicDataType {DynamicDataType}, eci {Eci}).",
-                request.SrcCorrelationId, request.XCorrelationId, result.Payload.GetType().Name, response.CredentialType,
-                response.DynamicDataType ?? "-", response.Eci ?? "-");
+                request.SrcCorrelationId, request.XCorrelationId, result.Payload.GetType().Name, payload.CredentialType,
+                payload.DynamicData?.DynamicDataType ?? "-", result.Eci ?? "-");
+            var response = CompleteCheckoutResponse.From(payload);
             await Send.OkAsync(response, ct);
         }
         catch (Exception ex) when (CheckoutErrors.ToProblem(ex, logger) is { } problem)
@@ -69,12 +71,13 @@ public sealed class CompleteCheckoutValidator : Validator<CompleteCheckoutReques
     public CompleteCheckoutValidator()
     {
         RuleFor(x => x.SpiToken).NotEmpty().MaximumLength(2048);
-        RuleFor(x => x.SrcDpaId).NotEmpty().MaximumLength(256)
-            .Must(id => string.Equals(id, Resolve<IOptions<MastercardCheckoutOptions>>().Value.SrcDpaId, StringComparison.Ordinal))
-            .WithMessage("srcDpaId does not match the configured DPA.");
+        RuleFor(x => x.SrcDpaId).NotEmpty().MaximumLength(256);
         RuleFor(x => x.SrcCorrelationId).NotEmpty().MaximumLength(256);
         RuleFor(x => x.MerchantTransactionId).NotEmpty().MaximumLength(256);
         RuleFor(x => x.FlowId).NotEmpty().MaximumLength(256);
+        RuleFor(x => x.TransactionAmount).GreaterThan(0).PrecisionScale(12, 2, ignoreTrailingZeros: true);
+        RuleFor(x => x.TransactionCurrencyCode).NotEmpty().Matches("^[A-Z]{3}$")
+            .WithMessage("transactionCurrencyCode must be an ISO 4217 alphabetic code, e.g. USD.");
         // Echoed in a response header: visible ASCII only.
         RuleFor(x => x.XCorrelationId).NotEmpty().MaximumLength(256).Matches("^[\\x21-\\x7E]+$")
             .WithMessage("xCorrelationId must be visible ASCII characters without spaces.");

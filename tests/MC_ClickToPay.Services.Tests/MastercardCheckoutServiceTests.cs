@@ -23,7 +23,6 @@ public sealed class MastercardCheckoutServiceTests
     private static readonly MastercardCheckoutOptions Settings = new()
     {
         BaseUrl = "https://sandbox.api.mastercard.com",
-        SrcDpaId = "823ef281-1a2e-4204-a69c-43d355522a35",
         ConsumerKey = "client-id!key-id",
     };
 
@@ -52,11 +51,12 @@ public sealed class MastercardCheckoutServiceTests
         Assert.Equal("flow-1", request.FlowId);
 
         var body = JsonNode.Parse(request.Body)!;
-        Assert.Equal(Settings.SrcDpaId, body["srcDpaId"]!.GetValue<string>());
+        Assert.Equal("merchant-dpa-1", body["srcDpaId"]!.GetValue<string>());
         Assert.Equal("corr-1", body["correlationId"]!.GetValue<string>());
         Assert.Equal("CLICK_TO_PAY", body["checkoutType"]!.GetValue<string>());
         Assert.Equal("mtid-1", body["checkoutReference"]!["data"]!["merchantTransactionId"]!.GetValue<string>());
-        Assert.Null(body["dpaTransactionOptions"]!["transactionAmount"]);
+        Assert.Equal("31.25", body["dpaTransactionOptions"]!["transactionAmount"]!["transactionAmount"]!.GetValue<string>());
+        Assert.Equal("USD", body["dpaTransactionOptions"]!["transactionAmount"]!["transactionCurrencyCode"]!.GetValue<string>());
         Assert.Equal("CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM",
             body["dpaTransactionOptions"]!["paymentOptions"]![0]!["dynamicDataType"]!.GetValue<string>());
         Assert.DoesNotContain("spi-token-1", request.Body);
@@ -103,10 +103,12 @@ public sealed class MastercardCheckoutServiceTests
     private static CompleteCheckoutRequest Request() => new()
     {
         SpiToken = "spi-token-1",
-        SrcDpaId = Settings.SrcDpaId,
+        SrcDpaId = "merchant-dpa-1",
         SrcCorrelationId = "corr-1",
         MerchantTransactionId = "mtid-1",
         FlowId = "flow-1",
+        TransactionAmount = 31.25m,
+        TransactionCurrencyCode = "USD",
         XCorrelationId = "x-corr-1",
     };
 

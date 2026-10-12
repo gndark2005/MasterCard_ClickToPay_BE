@@ -13,7 +13,7 @@ public sealed class CompleteCheckoutRequest
     [JsonPropertyName("spiToken")]
     public string SpiToken { get; init; } = string.Empty;
 
-    /// <summary>Must match the configured MastercardApi:SrcDpaId (the keys belong to that DPA).</summary>
+    /// <summary>The merchant's DPA: it varies per merchant and is sent as is to Mastercard /checkout.</summary>
     [JsonPropertyName("srcDpaId")]
     public string SrcDpaId { get; init; } = string.Empty;
 
@@ -27,6 +27,14 @@ public sealed class CompleteCheckoutRequest
     /// <summary>x-src-cx-flow-id header returned by checkoutWithCard().</summary>
     [JsonPropertyName("flowId")]
     public string FlowId { get; init; } = string.Empty;
+
+    /// <summary>Order amount, the same one given to checkoutWithCard(); sent to Mastercard /checkout.</summary>
+    [JsonPropertyName("transactionAmount")]
+    public decimal TransactionAmount { get; init; }
+
+    /// <summary>ISO 4217 alphabetic code, e.g. "USD".</summary>
+    [JsonPropertyName("transactionCurrencyCode")]
+    public string TransactionCurrencyCode { get; init; } = string.Empty;
 
     /// <summary>The UI's own tracing id: logged and echoed in the X-Correlation-Id response header, not sent to Mastercard.</summary>
     [JsonPropertyName("xCorrelationId")]

@@ -33,7 +33,7 @@ public sealed class MastercardCheckoutService(
 
         var body = new JsonObject
         {
-            ["srcDpaId"] = settings.SrcDpaId,
+            ["srcDpaId"] = request.SrcDpaId,
             ["correlationId"] = request.SrcCorrelationId,
             ["checkoutType"] = "CLICK_TO_PAY",
             ["checkoutReference"] = new JsonObject
@@ -42,9 +42,9 @@ public sealed class MastercardCheckoutService(
                 ["data"] = new JsonObject { ["merchantTransactionId"] = request.MerchantTransactionId },
             },
 
-            // No transactionAmount: the UI contract has no amount (checkoutWithCard() already received it).
             ["dpaTransactionOptions"] = new JsonObject
             {
+                ["transactionAmount"] = Amount(request.TransactionAmount, request.TransactionCurrencyCode),
                 ["paymentOptions"] = new JsonArray(new JsonObject { ["dynamicDataType"] = "CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM" }),
             },
         };
@@ -109,7 +109,7 @@ public sealed class MastercardCheckoutService(
         var settings = options.Value;
         if (!settings.IsConfigured)
         {
-            throw new MastercardCheckoutException("Mastercard API is not configured (SrcDpaId / ConsumerKey).");
+            throw new MastercardCheckoutException("Mastercard API is not configured (ConsumerKey).");
         }
 
         var uri = new Uri(new Uri(settings.BaseUrl.TrimEnd('/') + "/"), path);
