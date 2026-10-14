@@ -32,6 +32,11 @@ public static class RequiredSettings
         services.Configure<MastercardCheckoutOptions>(configuration.GetSection("MastercardApi"));
         services.Configure<MastercardSigningKeyOptions>(configuration.GetSection("MastercardApi"));
 
+        // Daily CSV of successful checkouts for the confirmation batch; relative folders resolve against the content root.
+        services.AddOptions<CheckoutTransactionFileOptions>()
+            .Bind(configuration.GetSection(CheckoutTransactionFileOptions.SectionName))
+            .PostConfigure<IHostEnvironment>((o, env) => o.Directory = Path.GetFullPath(o.Directory, env.ContentRootPath));
+
         // Optional: outcome of the simulated payment processor (default Approved), for the upcoming confirmation endpoint.
         services.Configure<PaymentSimulationOptions>(configuration.GetSection("PaymentSimulation"));
 

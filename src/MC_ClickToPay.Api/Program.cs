@@ -3,6 +3,8 @@ using FastEndpoints.Swagger;
 using MC_ClickToPay.Api.Authentication;
 using MC_ClickToPay.Api.Configuration;
 using MC_ClickToPay.Api.Keys;
+using MC_ClickToPay.Api.Simulation;
+using MC_ClickToPay.Services.Abstractions;
 using MC_ClickToPay.Services.DependencyInjection;
 using MC_ClickToPay.Services.Payments.PowerTranz;
 using Microsoft.AspNetCore.Authentication;
@@ -40,6 +42,11 @@ builder.Services.AddProblemDetails();
 builder.Services.AddRequiredSettings(builder.Configuration);
 builder.Services.AddMastercardPayloadDecryption<CertificatePayloadDecryptionKeyProvider>();
 builder.Services.AddMastercardCheckout<CertificateSigningKeyProvider>();
+if (builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("MastercardApi:Simulate"))
+{
+    // Demos without real checkoutWithCard() ids: only the Mastercard call is simulated.
+    builder.Services.AddScoped<IMastercardCheckoutService, SimulatedMastercardCheckoutService>();
+}
 
 // Payment flow (decrypt -> validate/map -> IPaymentProcessor), kept registered for the upcoming confirmation
 // endpoint: PowerTranz when its credentials are configured (PowerTranz section); otherwise the simulated processor.

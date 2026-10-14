@@ -20,7 +20,8 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers the server-side Click to Pay client (/checkout and /checkout/confirmations). Requires
+    /// Registers the server-side Click to Pay client (/checkout and /checkout/confirmations) and the daily
+    /// transaction file read by the confirmation batch. Requires
     /// <see cref="AddMastercardPayloadDecryption{TKeyProvider}"/>; the API configures <see cref="MastercardCheckoutOptions"/>.
     /// </summary>
     public static IServiceCollection AddMastercardCheckout<TSigningKeyProvider>(this IServiceCollection services)
@@ -29,6 +30,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMastercardSigningKeyProvider, TSigningKeyProvider>();
         services.AddHttpClient<IMastercardCheckoutService, MastercardCheckoutService>(
             client => client.Timeout = TimeSpan.FromSeconds(30));
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<ICheckoutTransactionFile, CsvCheckoutTransactionFile>();
         return services;
     }
 

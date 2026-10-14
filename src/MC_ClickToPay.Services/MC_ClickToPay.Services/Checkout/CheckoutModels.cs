@@ -6,7 +6,7 @@ namespace MC_ClickToPay.Services.Checkout;
 /// <summary>
 /// What the UI sends after checkoutWithCard(): the Mastercard values (checkoutResponseData and headers) plus the
 /// PowerTranz SPI token of its payment. The SPI token is not used here (the UI calls PowerTranz itself with the
-/// decrypted card); it is accepted for traceability and is never logged.
+/// decrypted card); it is never logged and is only written to the daily transaction file for the confirmation batch.
 /// </summary>
 public sealed class CompleteCheckoutRequest
 {

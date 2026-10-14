@@ -7,7 +7,8 @@ using MC_ClickToPay.Services.Exceptions;
 
 namespace MC_ClickToPay.Api.Endpoints.Checkout;
 
-public sealed class CompleteCheckoutEndpoint(IMastercardCheckoutService checkout, ILogger<CompleteCheckoutEndpoint> logger)
+public sealed class CompleteCheckoutEndpoint(
+    IMastercardCheckoutService checkout, ICheckoutTransactionFile transactions, ILogger<CompleteCheckoutEndpoint> logger)
     : Endpoint<CompleteCheckoutRequest, CompleteCheckoutResponse>
 {
     public override void Configure()
@@ -57,11 +58,28 @@ public sealed class CompleteCheckoutEndpoint(IMastercardCheckoutService checkout
                 request.SrcCorrelationId, request.XCorrelationId, result.Payload.GetType().Name, payload.CredentialType,
                 payload.DynamicData?.DynamicDataType ?? "-", result.Eci ?? "-");
             var response = CompleteCheckoutResponse.From(payload);
+
+            // For the confirmation batch: recorded only once the 200 has been sent, so the file never delays or fails it.
+            HttpContext.Response.OnCompleted(() => RecordTransactionAsync(request));
             await Send.OkAsync(response, ct);
         }
         catch (Exception ex) when (CheckoutErrors.ToProblem(ex, logger) is { } problem)
         {
             await Send.ResultAsync(problem);
+        }
+    }
+
+    private async Task RecordTransactionAsync(CompleteCheckoutRequest request)
+    {
+        try
+        {
+            await transactions.AppendAsync(request);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Checkout {CorrelationId} (x-correlation-id {XCorrelationId}) was not written to the transaction file; it must be confirmed manually.",
+                request.SrcCorrelationId, request.XCorrelationId);
         }
     }
 }

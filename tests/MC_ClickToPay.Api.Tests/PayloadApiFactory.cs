@@ -18,6 +18,9 @@ public sealed class PayloadApiFactory : WebApplicationFactory<Program>
 
     private readonly string pemPath = Path.Combine(Path.GetTempPath(), $"mctp-test-{Guid.NewGuid():N}.pem");
 
+    /// <summary>Folder of the daily checkout transaction files; deleted with the factory.</summary>
+    public string TransactionDirectory { get; } = Path.Combine(Path.GetTempPath(), $"mctp-txn-{Guid.NewGuid():N}");
+
     public bool MissingCertificate { get; set; }
 
     /// <summary>Configure the key as a PKCS#1 PEM ("BEGIN RSA PRIVATE KEY"), as Mastercard Developers provides it.</summary>
@@ -41,6 +44,7 @@ public sealed class PayloadApiFactory : WebApplicationFactory<Program>
                 ["Authentication:ApiKey"] = ApiKey,
                 ["MastercardApi:ConsumerKey"] = "",
                 ["MastercardApi:SigningKeyPath"] = "",
+                ["CheckoutTransactionFile:Directory"] = TransactionDirectory,
             }));
         builder.ConfigureServices(services => services.PostConfigure<PayloadEncryptionOptions>(options =>
         {
@@ -60,6 +64,23 @@ public sealed class PayloadApiFactory : WebApplicationFactory<Program>
             EncryptionKey.Dispose();
             File.Delete(certificatePath);
             File.Delete(pemPath);
+            DeleteTransactionDirectory();
+        }
+    }
+
+    /// <summary>Best effort: the row is written after the response, so it may still be open when a test ends.</summary>
+    private void DeleteTransactionDirectory()
+    {
+        for (var attempt = 0; attempt < 20 && Directory.Exists(TransactionDirectory); attempt++)
+        {
+            try
+            {
+                Directory.Delete(TransactionDirectory, recursive: true);
+            }
+            catch (IOException)
+            {
+                Thread.Sleep(50);
+            }
         }
     }
 }

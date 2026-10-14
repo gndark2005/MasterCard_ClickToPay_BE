@@ -202,6 +202,26 @@ request only, is never logged, and must not be cached or stored by the caller.
 
 The payment flow (validation, PowerTranz/simulated processor) stays in `MC_ClickToPay.Services/Payments` for the
 upcoming confirmation endpoint; `IMastercardCheckoutService.ConfirmAsync` (Mastercard `/checkout/confirmations`) too.
+
+### Daily transaction file (for the confirmation batch)
+
+Mastercard `/checkout/confirmations` is called by a batch process, outside the checkout. For it, every successful
+`POST /api/checkout` (HTTP 200) appends one row to a daily CSV, **after** the response has been sent, so the file never
+delays or fails the checkout. Failed checkouts are not written; a row that cannot be written is logged as an error
+with its `srcCorrelationId` and `xCorrelationId`.
+
+- Folder: `CheckoutTransactionFile:Directory` (default `transactions`, relative to the content root).
+- File: `ctp_txn_YYYYMMDD.csv`, one per day (server local time), with a header row:
+
+```text
+date,time,spitoken,transaction_amount,transaction_currency,SrcDpaId,SrcCorrelationId,MerchantTransactionId,FlowId,XCorrelationId
+20261012,090507,<spiToken>,31.25,USD,823ef281-...,34f4a04b.2ce61515-...,0a4e0d3.34f4a04b...,34f4a04b...1790888627,7d1f6c2e-...
+```
+
+`date` is `YYYYMMDD`, `time` `HHMMSS`; values with a comma or quote are quoted (RFC 4180). No card data is written,
+but the file holds SPI tokens: restrict access to the folder. The batch should read the file with shared read/write
+access (the API may still be appending), or process the previous day's file.
+
 ## Tests
 
 ```powershell

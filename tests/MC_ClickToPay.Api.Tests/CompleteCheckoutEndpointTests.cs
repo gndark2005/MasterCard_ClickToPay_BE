@@ -243,6 +243,76 @@ public sealed class CompleteCheckoutEndpointTests
         Assert.Equal("another-merchant-dpa", checkout.LastRequest!.SrcDpaId);
     }
 
+    [Fact]
+    public async Task SuccessfulCheckoutIsWrittenToTheDailyTransactionFile()
+    {
+        var checkout = new FakeCheckout(new CompleteCheckoutResult
+        {
+            Payload = JsonSerializer.Deserialize<DecryptedPayloadDto>("""{"card":{"primaryAccountNumber":"5120350100064537","panExpirationMonth":"12","panExpirationYear":"2030"},"dynamicData":{"dynamicDataType":"NONE"}}""")!
+        });
+        using var baseFactory = new PayloadApiFactory();
+        using var factory = Factory(baseFactory, checkout);
+        using var client = Client(factory);
+
+        using var response = await client.PostAsJsonAsync(Route, FrontRequest);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var lines = await ReadTransactionFileAsync(baseFactory.TransactionDirectory, expectedLines: 2);
+        Assert.Equal(CsvCheckoutTransactionFile.Header, lines[0]);
+        var columns = lines[1].Split(',');
+        Assert.Matches("^\\d{8}$", columns[0]);
+        Assert.Matches("^\\d{6}$", columns[1]);
+        Assert.Equal(
+            ["spi-token-1", "31.25", "USD", "823ef281-1a2e-4204-a69c-43d355522a35",
+             "34f4a04b.2ce61515-55b7-4c09-845b-45492c2ef327", "0a4e0d3.34f4a04b.f91587770b3c99ce1090fe8a4f2a931b10d7acfc",
+             "34f4a04b.2ce61515-55b7-4c09-845b-45492c2ef327.1790888627", "7d1f6c2e-9a43-4b8e-b1a2-3f5c8e0d4a17"],
+            columns[2..]);
+        // Never card data.
+        Assert.DoesNotContain("5120350100064537", string.Join('\n', lines), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FailedCheckoutIsNotWrittenToTheTransactionFile()
+    {
+        using var baseFactory = new PayloadApiFactory();
+        using var factory = Factory(baseFactory, new FakeCheckout(new PayloadDecryptionException(PayloadDecryptionError.DecryptionFailed)));
+        using var client = Client(factory);
+
+        using var response = await client.PostAsJsonAsync(Route, FrontRequest);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await Task.Delay(200);
+        Assert.False(Directory.Exists(baseFactory.TransactionDirectory)
+            && Directory.EnumerateFiles(baseFactory.TransactionDirectory).Any());
+    }
+
+    /// <summary>The row is written after the response is sent, so wait briefly for it.</summary>
+    private static async Task<string[]> ReadTransactionFileAsync(string directory, int expectedLines)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            var file = Directory.Exists(directory) ? Directory.EnumerateFiles(directory, "ctp_txn_*.csv").SingleOrDefault() : null;
+            if (file is not null)
+            {
+                // Shared like the batch reader must open it: the API may still be appending.
+                await using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var reader = new StreamReader(stream);
+                var lines = (await reader.ReadToEndAsync()).Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+                if (lines.Length >= expectedLines || attempt == 50)
+                {
+                    Assert.Matches("^ctp_txn_\\d{8}\\.csv$", Path.GetFileName(file));
+                    return lines;
+                }
+            }
+            else if (attempt == 50)
+            {
+                Assert.Fail("The transaction file was not written.");
+            }
+
+            await Task.Delay(100);
+        }
+    }
+
     private static async Task<JsonElement> PostAsync(string decryptedPayloadJson)
     {
         var result = new CompleteCheckoutResult
