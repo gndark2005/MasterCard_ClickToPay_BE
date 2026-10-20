@@ -14,4 +14,9 @@
     <PackageReference Include="MySqlConnector" Version="2.6.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Database migrations ship inside the DLL, so every deployment carries them and applies the pending ones at startup. -->
+    <EmbeddedResource Include="Database\Migrations\*.sql" />
+  </ItemGroup>
+
 </Project>

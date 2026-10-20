@@ -54,39 +54,7 @@ public sealed class NoCheckoutTransactionStore : ICheckoutTransactionStore
 
 public sealed class MySqlCheckoutTransactionStore(MySqlDataSource dataSource, TimeProvider time) : ICheckoutTransactionStore
 {
-    /// <summary>The table of docs/db/schema.sql, created at startup when it does not exist.</summary>
-    public const string CreateTableSql = """
-        CREATE TABLE IF NOT EXISTS checkout_transactions (
-            id                             BIGINT AUTO_INCREMENT PRIMARY KEY,
-            src_correlation_id             VARCHAR(256)  NOT NULL,
-            merchant_transaction_id        VARCHAR(255)  NULL,
-            flow_id                        VARCHAR(256)  NULL,
-            x_correlation_id               VARCHAR(256)  NULL,
-            src_dpa_id                     VARCHAR(256)  NULL,
-            spi_token                      VARCHAR(2048) NULL,
-            transaction_amount             DECIMAL(14,2) NULL,
-            transaction_currency           CHAR(3)       NULL,
-            status                         VARCHAR(20)   NOT NULL,
-            checkout_at                    DATETIME(3)   NULL     COMMENT 'UTC',
-            confirmation_attempts          INT           NOT NULL DEFAULT 0,
-            last_confirmation_at           DATETIME(3)   NULL     COMMENT 'UTC',
-            confirmed_at                   DATETIME(3)   NULL     COMMENT 'UTC',
-            checkout_event_type            CHAR(2)       NULL,
-            checkout_event_status          CHAR(2)       NULL,
-            confirmation_status            CHAR(2)       NULL,
-            confirmation_reason            VARCHAR(255)  NULL,
-            network_authorization_code     VARCHAR(64)   NULL,
-            network_transaction_identifier VARCHAR(255)  NULL,
-            mastercard_http_status         INT           NULL     COMMENT 'Mastercard status of the last failed confirmation',
-            mastercard_detail              VARCHAR(1000) NULL     COMMENT 'Reason code and description; never payload data',
-            mastercard_flow_id             VARCHAR(256)  NULL     COMMENT 'X-Src-Cx-Flow-Id returned by the last confirmation',
-            created_at                     DATETIME(3)   NOT NULL COMMENT 'UTC',
-            updated_at                     DATETIME(3)   NOT NULL COMMENT 'UTC',
-            UNIQUE KEY ux_checkout_src_correlation_id (src_correlation_id),
-            KEY ix_checkout_status (status),
-            KEY ix_checkout_checkout_at (checkout_at)
-        ) ENGINE = InnoDB
-        """;
+    // The table is created and changed by the migrations in Database/Migrations (DatabaseMigrator), not here.
 
     // A repeated checkout (same srcCorrelationId) refreshes its data but keeps its status and confirmation history.
     private const string RecordCheckoutSql = """
@@ -144,12 +112,6 @@ public sealed class MySqlCheckoutTransactionStore(MySqlDataSource dataSource, Ti
             transaction_currency = COALESCE(checkout_transactions.transaction_currency, new.transaction_currency),
             updated_at = new.updated_at
         """;
-
-    public async Task EnsureSchemaAsync(CancellationToken cancellationToken = default)
-    {
-        await using var command = dataSource.CreateCommand(CreateTableSql);
-        await command.ExecuteNonQueryAsync(cancellationToken);
-    }
 
     public async Task RecordCheckoutAsync(CompleteCheckoutRequest request, CancellationToken cancellationToken = default)
     {
