@@ -49,7 +49,7 @@ its outcome by hand, one as `/api/checkout` writes it).
 
 ```bash
 curl -k -X POST https://localhost:7180/api/confirmations/<spiToken> -H "X-Api-Key: clicktopay-dev-key" \
-  -H "Content-Type: application/json" -d '{"approved":true,"authorizationCode":"123456","responseMessage":"Transaction is approved"}'
+  -H "Content-Type: application/json" -d '{"approved":true,"authorizationCode":"123456","responseMessage":"Transaction is approved","networkTransactionIdentifier":"mastercard"}'
 ```
 
 The API looks for the row whose `spitoken` is the one in the route, in every `ctp_txn_*.csv` of the folder, newest file

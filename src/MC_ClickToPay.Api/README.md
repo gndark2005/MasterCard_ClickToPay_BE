@@ -219,14 +219,18 @@ curl -k -X POST https://localhost:7180/api/confirmations/<spiToken> -H "X-Api-Ke
 | Body field | Required | From PowerTranz | Sent to Mastercard as |
 |---|---|---|---|
 | `approved` | yes | `Approved` | `checkoutEventType` 01; `checkoutEventStatus` and `confirmationStatus` 01 (true) or 02 (false) |
-| `authorizationCode` | no, max 64 | `AuthorizationCode` | `networkAuthorizationCode` |
+| `authorizationCode` | **yes when `approved` is true**, max 64 | `AuthorizationCode` | `networkAuthorizationCode` |
 | `responseMessage` | no, max 255 | `ResponseMessage` | `confirmationReason` |
-| `networkTransactionIdentifier` | no, max 255 | - | `networkTransactionIdentifier` (e.g. `mastercard`) |
+| `networkTransactionIdentifier` | **yes**, max 255 | - | `networkTransactionIdentifier` (`mastercard`) |
 
-**Send `authorizationCode` and `networkTransactionIdentifier`.** Verified against the Mastercard sandbox on
-2026-10-20 with a real Click to Pay checkout and a PowerTranz approved payment: without them Mastercard answers
+All four are written to the transaction file row (`confirmation_reason`, `network_authorization_code`,
+`network_transaction_identifier` and the codes), also when Mastercard rejects the confirmation.
+
+Why `authorizationCode` and `networkTransactionIdentifier` are required: verified against the Mastercard sandbox on
+2026-10-20 with a real Click to Pay checkout and a PowerTranz approved payment, without them Mastercard answers
 `400 [INVALID_ARGUMENT] One or more fields in the request are either missing or does not have correct value`; with
-them (`123456`, `mastercard`) it accepts the confirmation.
+them (`123456`, `mastercard`) it accepts the confirmation. The API now refuses the request itself (400) when they are
+missing, before calling Mastercard.
 
 1. Finds the row of the SPI token.
 2. Sends `SrcCorrelationId` (body `correlationId`), `MerchantTransactionId` (body and `merchant-transaction-id`
@@ -254,7 +258,7 @@ A `Confirmed` row is not sent again (409); a `ConfirmationFailed` row can be con
 | Status | When |
 |---|---|
 | 200 | Mastercard accepted it. Headers `X-Src-Cx-Flow-Id` (the flow id Mastercard returned) and `X-Correlation-Id` (the row's). |
-| 400 | SPI token longer than 2048, body without `approved` or with values too long, or Mastercard rejected the data (its reason code is in `detail`). |
+| 400 | SPI token longer than 2048; body without `approved` or `networkTransactionIdentifier`, approved without `authorizationCode`, or values too long; or Mastercard rejected the data (its reason code is in `detail`). |
 | 401 | `X-Api-Key` missing or wrong. |
 | 404 | No row has this SPI token (`Transaction not found.`), or Mastercard did not find the checkout transaction. |
 | 409 | Already confirmed, or another request is confirming the same SPI token. |

@@ -57,14 +57,22 @@ public sealed class TransactionConfirmationServiceTests : IDisposable
     [Fact]
     public async Task AConfirmationIsWrittenToTheRowAndTheDatabase()
     {
-        await WriteFileAsync("ctp_txn_20261015.csv", Row("spi-1", "corr-1"), Row("spi-2", "corr-2"));
+        // Rows as /api/checkout writes them: no outcome yet.
+        await WriteFileAsync("ctp_txn_20261015.csv",
+            "20261015,090507,spi-1,31.25,USD,dpa-1,corr-1,mtid-1,flow-1,x-1,,,,,,,,,,",
+            "20261015,090508,spi-2,31.25,USD,dpa-1,corr-2,mtid-1,flow-1,x-1,,,,,,,,,,");
         var checkout = new FakeCheckout(_ => new CheckoutConfirmationResult { FlowId = "flow-back" });
 
         await Service(checkout).ConfirmAsync("spi-1", Approved, CancellationToken.None);
 
         var rows = await ReadFileAsync("ctp_txn_20261015.csv");
         Assert.Equal("Confirmed", rows[0].ConfirmationResult);
+        Assert.Equal(("01", "01", "01"), (rows[0].CheckoutEventType, rows[0].CheckoutEventStatus, rows[0].ConfirmationStatus));
+        Assert.Equal("Approved, thank you", rows[0].ConfirmationReason);
+        Assert.Equal("123456", rows[0].NetworkAuthorizationCode);
+        Assert.Equal("mastercard", rows[0].NetworkTransactionIdentifier);
         Assert.Null(rows[1].ConfirmationResult);
+        Assert.Null(rows[1].NetworkAuthorizationCode);
         var (request, outcome) = Assert.Single(store.Confirmations);
         Assert.Equal("corr-1", request.CorrelationId);
         Assert.True(outcome.Confirmed);
@@ -129,7 +137,12 @@ public sealed class TransactionConfirmationServiceTests : IDisposable
         await WriteFileAsync("ctp_txn_20261015.csv",
             "20261015,090507,spi-1,31.25,USD,dpa-1,corr-1,mtid-1,flow-1,x-1,,,,,,,,,,");
         var checkout = new FakeCheckout(_ => new CheckoutConfirmationResult());
-        var declined = new PaymentOutcome { Approved = false, ResponseMessage = "Declined, do not honour" };
+        var declined = new PaymentOutcome
+        {
+            Approved = false,
+            ResponseMessage = "Declined, do not honour",
+            NetworkTransactionIdentifier = "mastercard"
+        };
 
         var result = await Service(checkout).ConfirmAsync("spi-1", declined, CancellationToken.None);
 
@@ -142,6 +155,8 @@ public sealed class TransactionConfirmationServiceTests : IDisposable
         var row = (await ReadFileAsync("ctp_txn_20261015.csv"))[0];
         Assert.Equal(("01", "02", "02"), (row.CheckoutEventType, row.CheckoutEventStatus, row.ConfirmationStatus));
         Assert.Equal("Declined, do not honour", row.ConfirmationReason);
+        Assert.Null(row.NetworkAuthorizationCode);
+        Assert.Equal("mastercard", row.NetworkTransactionIdentifier);
         Assert.Equal("Confirmed", row.ConfirmationResult);
     }
 

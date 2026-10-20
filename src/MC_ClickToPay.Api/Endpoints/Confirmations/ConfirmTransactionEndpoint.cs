@@ -16,7 +16,7 @@ public sealed class ConfirmTransactionRequest
     [JsonPropertyName("approved")]
     public bool? Approved { get; init; }
 
-    /// <summary>PowerTranz AuthorizationCode.</summary>
+    /// <summary>PowerTranz AuthorizationCode. Required when approved is true.</summary>
     [JsonPropertyName("authorizationCode")]
     public string? AuthorizationCode { get; init; }
 
@@ -24,6 +24,7 @@ public sealed class ConfirmTransactionRequest
     [JsonPropertyName("responseMessage")]
     public string? ResponseMessage { get; init; }
 
+    /// <summary>Required, e.g. "mastercard".</summary>
     [JsonPropertyName("networkTransactionIdentifier")]
     public string? NetworkTransactionIdentifier { get; init; }
 
@@ -58,7 +59,9 @@ public sealed class ConfirmTransactionEndpoint(TransactionConfirmationService co
                 "POST /srci/api/checkout/confirmations its SrcCorrelationId, MerchantTransactionId, FlowId and amount " +
                 "with the payment outcome: checkoutEventType 01; checkoutEventStatus and confirmationStatus 01 when " +
                 "approved, 02 when not; responseMessage as confirmationReason; authorizationCode as " +
-                "networkAuthorizationCode. The outcome and the result are written back to the row (outcome columns, " +
+                "networkAuthorizationCode. Required: approved, networkTransactionIdentifier (e.g. mastercard), and " +
+                "authorizationCode when approved is true (Mastercard rejects the confirmation without them). " +
+                "The outcome and the result are written back to the row (outcome columns, " +
                 "confirmation_result, confirmation_date, confirmation_time, confirmation_detail) and to the database. " +
                 "A row already Confirmed is not sent again; a ConfirmationFailed row can be confirmed again.";
             s.Params["spiToken"] = "PowerTranz SpiToken of the transaction (the one sent to POST /api/checkout).";
@@ -70,7 +73,7 @@ public sealed class ConfirmTransactionEndpoint(TransactionConfirmationService co
                 NetworkTransactionIdentifier = "mastercard"
             };
             s.Response<TransactionConfirmationResult>(200, "Mastercard accepted the confirmation. Headers: X-Src-Cx-Flow-Id, X-Correlation-Id.");
-            s.Response(400, "Invalid SPI token or body, or Mastercard rejected the confirmation data (its reason code is included).");
+            s.Response(400, "Invalid SPI token or body (approved, networkTransactionIdentifier or, when approved, authorizationCode missing), or Mastercard rejected the confirmation data (its reason code is included).");
             s.Response(401, "API key is missing, incorrect or not configured.");
             s.Response(404, "No transaction file row has this SPI token, or Mastercard did not find the checkout transaction.");
             s.Response(409, "The transaction was already confirmed, or another request is confirming it.");
@@ -142,8 +145,14 @@ public sealed class ConfirmTransactionValidator : Validator<ConfirmTransactionRe
     {
         RuleFor(x => x.SpiToken).NotEmpty().MaximumLength(2048);
         RuleFor(x => x.Approved).NotNull().WithMessage("approved is required: the PowerTranz Approved of the payment.");
+        // Mastercard rejects a confirmation without them (400 INVALID_ARGUMENT, sandbox 2026-10-20). A declined payment
+        // has no authorization code.
+        RuleFor(x => x.AuthorizationCode).NotEmpty().When(x => x.Approved == true)
+            .WithMessage("authorizationCode is required when approved is true: the PowerTranz AuthorizationCode.");
         RuleFor(x => x.AuthorizationCode).MaximumLength(64);
         RuleFor(x => x.ResponseMessage).MaximumLength(255);
+        RuleFor(x => x.NetworkTransactionIdentifier).NotEmpty()
+            .WithMessage("networkTransactionIdentifier is required, e.g. mastercard.");
         RuleFor(x => x.NetworkTransactionIdentifier).MaximumLength(255);
     }
 }

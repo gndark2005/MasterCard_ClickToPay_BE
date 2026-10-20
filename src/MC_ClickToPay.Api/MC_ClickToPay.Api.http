@@ -45,7 +45,9 @@ Content-Type: application/json
 X-Api-Key: {{apiKey}}
 
 {
-  "approved": true
+  "approved": true,
+  "authorizationCode": "123456",
+  "networkTransactionIdentifier": "mastercard"
 }
 
 ### Step 5 - Declined payment (use a new @spiToken after step 1): checkoutEventStatus and confirmationStatus 02
@@ -55,7 +57,8 @@ X-Api-Key: {{apiKey}}
 
 {
   "approved": false,
-  "responseMessage": "Declined by the issuer"
+  "responseMessage": "Declined by the issuer",
+  "networkTransactionIdentifier": "mastercard"
 }
 
 ### Step 6 - Unknown SPI token: 404 "Transaction not found."
@@ -64,10 +67,12 @@ Content-Type: application/json
 X-Api-Key: {{apiKey}}
 
 {
-  "approved": true
+  "approved": true,
+  "authorizationCode": "123456",
+  "networkTransactionIdentifier": "mastercard"
 }
 
-### Step 7 - Body without "approved": 400
+### Step 7 - Body without "approved" (or approved without authorizationCode, or without networkTransactionIdentifier): 400
 POST {{baseUrl}}/api/confirmations/{{spiToken}}
 Content-Type: application/json
 X-Api-Key: {{apiKey}}
@@ -79,7 +84,9 @@ POST {{baseUrl}}/api/confirmations/{{spiToken}}
 Content-Type: application/json
 
 {
-  "approved": true
+  "approved": true,
+  "authorizationCode": "123456",
+  "networkTransactionIdentifier": "mastercard"
 }
 
 ### Decrypt an encryptedPayload directly (debugging)

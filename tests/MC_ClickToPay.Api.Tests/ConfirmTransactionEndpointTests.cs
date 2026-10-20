@@ -44,8 +44,12 @@ public sealed class ConfirmTransactionEndpointTests
         Assert.Equal("123456", sent.ConfirmationData!.NetworkAuthorizationCode);
         Assert.Equal(31.25m, sent.ConfirmationData.TransactionAmount!.Amount);
 
+        // The PowerTranz result received is kept in the row with the confirmation result.
         var row = Assert.Single(await ReadFileAsync(baseFactory));
         Assert.Equal("Confirmed", row.ConfirmationResult);
+        Assert.Equal("123456", row.NetworkAuthorizationCode);
+        Assert.Equal("mastercard", row.NetworkTransactionIdentifier);
+        Assert.Equal("The payment was successful", row.ConfirmationReason);
     }
 
     [Fact]
@@ -90,18 +94,25 @@ public sealed class ConfirmTransactionEndpointTests
         using var client = Client(factory);
 
         using var response = await client.PostAsJsonAsync(Route("spi-1"),
-            new { approved = false, responseMessage = "Declined" });
+            new { approved = false, responseMessage = "Declined", networkTransactionIdentifier = "mastercard" });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("02", checkout.LastRequest!.ConfirmationData!.ConfirmationStatus);
         var row = Assert.Single(await ReadFileAsync(baseFactory));
-        Assert.Equal(("01", "02", "02", "Declined"),
-            (row.CheckoutEventType, row.CheckoutEventStatus, row.ConfirmationStatus, row.ConfirmationReason));
+        Assert.Equal(("01", "02", "02", "Declined", null, "mastercard"),
+            (row.CheckoutEventType, row.CheckoutEventStatus, row.ConfirmationStatus, row.ConfirmationReason,
+             row.NetworkAuthorizationCode, row.NetworkTransactionIdentifier));
     }
 
     [Theory]
     [InlineData("{}")]
-    [InlineData("""{"approved":true,"authorizationCode":"12345678901234567890123456789012345678901234567890123456789012345"}""")]
+    [InlineData("""{"networkTransactionIdentifier":"mastercard"}""")]
+    // Approved without the authorization code, or without the network transaction identifier.
+    [InlineData("""{"approved":true,"networkTransactionIdentifier":"mastercard"}""")]
+    [InlineData("""{"approved":true,"authorizationCode":" ","networkTransactionIdentifier":"mastercard"}""")]
+    [InlineData("""{"approved":true,"authorizationCode":"123456"}""")]
+    [InlineData("""{"approved":false}""")]
+    [InlineData("""{"approved":true,"networkTransactionIdentifier":"mastercard","authorizationCode":"12345678901234567890123456789012345678901234567890123456789012345"}""")]
     public async Task AnInvalidBodyReturns400(string body)
     {
         var checkout = new FakeCheckout(new CheckoutConfirmationResult());
@@ -162,7 +173,10 @@ public sealed class ConfirmTransactionEndpointTests
         Assert.Equal(expected, response.StatusCode);
         Assert.Contains("[REASON] Description", await response.Content.ReadAsStringAsync());
         Assert.Equal("x-1", response.Headers.GetValues("X-Correlation-Id").Single());
-        Assert.Equal("ConfirmationFailed", Assert.Single(await ReadFileAsync(baseFactory)).ConfirmationResult);
+        // Also kept when Mastercard rejects it, so the row shows what was sent.
+        var row = Assert.Single(await ReadFileAsync(baseFactory));
+        Assert.Equal("ConfirmationFailed", row.ConfirmationResult);
+        Assert.Equal(("123456", "mastercard"), (row.NetworkAuthorizationCode, row.NetworkTransactionIdentifier));
     }
 
     // A PowerTranz /spi/Payment result.
