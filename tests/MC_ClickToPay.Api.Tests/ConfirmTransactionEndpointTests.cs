@@ -104,15 +104,37 @@ public sealed class ConfirmTransactionEndpointTests
              row.NetworkAuthorizationCode, row.NetworkTransactionIdentifier));
     }
 
+    [Fact]
+    public async Task WithoutNetworkTransactionIdentifierUnavlbIsSentAndStored()
+    {
+        var checkout = new FakeCheckout(new CheckoutConfirmationResult());
+        using var baseFactory = new PayloadApiFactory();
+        await WriteFileAsync(baseFactory, "20261015,090507,spi-1,31.25,USD,dpa-1,corr-1,mtid-1,flow-1,x-1,,,,,,,,,,");
+        using var factory = Factory(baseFactory, checkout);
+        using var client = Client(factory);
+
+        // What the front sends: the PowerTranz /spi/Payment result only.
+        using var response = await client.PostAsJsonAsync(Route("spi-1"),
+            new { approved = true, authorizationCode = "123456", responseMessage = "Transaction is approved" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("UNAVLB", checkout.LastRequest!.ConfirmationData!.NetworkTransactionIdentifier);
+        var row = Assert.Single(await ReadFileAsync(baseFactory));
+        Assert.Equal(("123456", "UNAVLB", "Transaction is approved"),
+            (row.NetworkAuthorizationCode, row.NetworkTransactionIdentifier, row.ConfirmationReason));
+    }
+
     [Theory]
     [InlineData("{}")]
     [InlineData("""{"networkTransactionIdentifier":"mastercard"}""")]
     // Approved without the authorization code, or without the network transaction identifier.
     [InlineData("""{"approved":true,"networkTransactionIdentifier":"mastercard"}""")]
     [InlineData("""{"approved":true,"authorizationCode":" ","networkTransactionIdentifier":"mastercard"}""")]
-    [InlineData("""{"approved":true,"authorizationCode":"123456"}""")]
-    [InlineData("""{"approved":false}""")]
-    [InlineData("""{"approved":true,"networkTransactionIdentifier":"mastercard","authorizationCode":"12345678901234567890123456789012345678901234567890123456789012345"}""")]
+    // Formats of Mastercard checkout1.0.yaml: authorization code up to 25 letters or digits, network id up to 25.
+    [InlineData("""{"approved":true,"authorizationCode":"12345678901234567890123456"}""")]
+    [InlineData("""{"approved":true,"authorizationCode":"123-456"}""")]
+    [InlineData("""{"approved":true,"authorizationCode":"123456","networkTransactionIdentifier":"12345678901234567890123456"}""")]
+    [InlineData("""{"approved":true,"authorizationCode":"123456","networkTransactionIdentifier":"abc/123"}""")]
     public async Task AnInvalidBodyReturns400(string body)
     {
         var checkout = new FakeCheckout(new CheckoutConfirmationResult());

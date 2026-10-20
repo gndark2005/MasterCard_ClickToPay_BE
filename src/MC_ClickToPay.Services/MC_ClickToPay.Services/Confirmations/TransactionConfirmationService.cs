@@ -50,7 +50,10 @@ public sealed class PaymentOutcome
     [JsonPropertyName("responseMessage")]
     public string? ResponseMessage { get; init; }
 
-    /// <summary>Optional networkTransactionIdentifier, e.g. "mastercard".</summary>
+    /// <summary>
+    /// The tracing value the payment network assigned in the authorization response. Optional:
+    /// <see cref="TransactionConfirmationService.UnavailableNetworkTransactionIdentifier"/> is sent when it is missing.
+    /// </summary>
     [JsonPropertyName("networkTransactionIdentifier")]
     public string? NetworkTransactionIdentifier { get; init; }
 }
@@ -211,10 +214,30 @@ public sealed partial class TransactionConfirmationService(
         }
     }
 
+    /// <summary>
+    /// Sent when the caller has no networkTransactionIdentifier. Mastercard checkout1.0.yaml: required when
+    /// checkoutEventType=01, "if ... unknown, please pass UNAVLB".
+    /// </summary>
+    public const string UnavailableNetworkTransactionIdentifier = "UNAVLB";
+
+    // Mastercard ConfirmationData.confirmationReason: up to 64 characters of ^[0-9a-zA-Z ,;!?.-_]*$.
+    private const int ConfirmationReasonMaximumLength = 64;
+
     // The file row with the outcome columns taken from the PowerTranz result (blank values become null).
     private static CheckoutTransactionRow WithOutcome(CheckoutTransactionRow row, PaymentOutcome payment)
     {
         static string? Value(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+        // PowerTranz ResponseMessage is free text: characters Mastercard does not accept are dropped and it is cut to
+        // 64, so a message never makes Mastercard reject the confirmation.
+        static string? Reason(string? message)
+        {
+            var text = Value(message) is { } value
+                ? Value(Spaces().Replace(ReasonCharacters().Replace(value, string.Empty), " "))
+                : null;
+            return text is { Length: > ConfirmationReasonMaximumLength } ? text[..ConfirmationReasonMaximumLength].TrimEnd() : text;
+        }
+
         var status = payment.Approved ? "01" : "02";
         return new CheckoutTransactionRow
         {
@@ -230,9 +253,9 @@ public sealed partial class TransactionConfirmationService(
             CheckoutEventType = "01",
             CheckoutEventStatus = status,
             ConfirmationStatus = status,
-            ConfirmationReason = Value(payment.ResponseMessage),
+            ConfirmationReason = Reason(payment.ResponseMessage),
             NetworkAuthorizationCode = Value(payment.AuthorizationCode),
-            NetworkTransactionIdentifier = Value(payment.NetworkTransactionIdentifier),
+            NetworkTransactionIdentifier = Value(payment.NetworkTransactionIdentifier) ?? UnavailableNetworkTransactionIdentifier,
             ConfirmationResult = row.ConfirmationResult
         };
     }
@@ -303,6 +326,14 @@ public sealed partial class TransactionConfirmationService(
 
         return errors;
     }
+
+    // Anything outside Mastercard's confirmationReason pattern ^[0-9a-zA-Z ,;!?.-_]*$ (".-_" is the ASCII range . to _,
+    // so a literal "-" is not allowed).
+    [GeneratedRegex("[^0-9a-zA-Z ,;!?.-_]")]
+    private static partial Regex ReasonCharacters();
+
+    [GeneratedRegex(" {2,}")]
+    private static partial Regex Spaces();
 
     [GeneratedRegex("^[0-9]{2}$")]
     private static partial Regex TwoDigits();

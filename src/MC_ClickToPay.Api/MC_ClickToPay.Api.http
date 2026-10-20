@@ -28,6 +28,7 @@ X-Api-Key: {{apiKey}}
 # Step 2 - Open today's ctp_txn_YYYYMMDD.csv: the row of @spiToken is there, its last ten columns empty.
 
 ### Step 3 - Confirmation with the PowerTranz /spi/Payment result: 200, the row gets the outcome and confirmation_result = Confirmed
+# networkTransactionIdentifier is optional: UNAVLB is sent (and stored) when it is missing.
 POST {{baseUrl}}/api/confirmations/{{spiToken}}
 Content-Type: application/json
 X-Api-Key: {{apiKey}}
@@ -35,8 +36,7 @@ X-Api-Key: {{apiKey}}
 {
   "approved": true,
   "authorizationCode": "123456",
-  "responseMessage": "Transaction is approved",
-  "networkTransactionIdentifier": "mastercard"
+  "responseMessage": "Transaction is approved"
 }
 
 ### Step 4 - Same SPI token again: 409, nothing sent to Mastercard
@@ -46,8 +46,7 @@ X-Api-Key: {{apiKey}}
 
 {
   "approved": true,
-  "authorizationCode": "123456",
-  "networkTransactionIdentifier": "mastercard"
+  "authorizationCode": "123456"
 }
 
 ### Step 5 - Declined payment (use a new @spiToken after step 1): checkoutEventStatus and confirmationStatus 02
@@ -57,8 +56,7 @@ X-Api-Key: {{apiKey}}
 
 {
   "approved": false,
-  "responseMessage": "Declined by the issuer",
-  "networkTransactionIdentifier": "mastercard"
+  "responseMessage": "Declined by the issuer"
 }
 
 ### Step 6 - Unknown SPI token: 404 "Transaction not found."
@@ -68,11 +66,10 @@ X-Api-Key: {{apiKey}}
 
 {
   "approved": true,
-  "authorizationCode": "123456",
-  "networkTransactionIdentifier": "mastercard"
+  "authorizationCode": "123456"
 }
 
-### Step 7 - Body without "approved" (or approved without authorizationCode, or without networkTransactionIdentifier): 400
+### Step 7 - Body without "approved" (or approved without authorizationCode): 400
 POST {{baseUrl}}/api/confirmations/{{spiToken}}
 Content-Type: application/json
 X-Api-Key: {{apiKey}}
@@ -85,8 +82,7 @@ Content-Type: application/json
 
 {
   "approved": true,
-  "authorizationCode": "123456",
-  "networkTransactionIdentifier": "mastercard"
+  "authorizationCode": "123456"
 }
 
 ### Decrypt an encryptedPayload directly (debugging)

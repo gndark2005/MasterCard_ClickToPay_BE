@@ -160,6 +160,29 @@ public sealed class TransactionConfirmationServiceTests : IDisposable
         Assert.Equal("Confirmed", row.ConfirmationResult);
     }
 
+    [Fact]
+    public async Task TheResponseMessageIsCleanedToWhatMastercardAccepts()
+    {
+        await WriteFileAsync("ctp_txn_20261015.csv",
+            "20261015,090507,spi-1,31.25,USD,dpa-1,corr-1,mtid-1,flow-1,x-1,,,,,,,,,,");
+        var checkout = new FakeCheckout(_ => new CheckoutConfirmationResult());
+        var payment = new PaymentOutcome
+        {
+            Approved = false,
+            // Characters outside ^[0-9a-zA-Z ,;!?.-_]*$ are dropped (#, (, ), ' and -, since ".-_" is a range), double
+            // spaces are collapsed, then it is cut to 64.
+            ResponseMessage = "Declined (do not honour) #05 - card holder's issuer refused the transaction, please retry later"
+        };
+
+        await Service(checkout).ConfirmAsync("spi-1", payment, CancellationToken.None);
+
+        var reason = Assert.Single(checkout.Requests).ConfirmationData!.ConfirmationReason!;
+        Assert.Equal("Declined do not honour 05 card holders issuer refused the transa", reason);
+        Assert.True(reason.Length <= 64);
+        Assert.Equal("UNAVLB", checkout.Requests[0].ConfirmationData!.NetworkTransactionIdentifier);
+        Assert.Equal(reason, (await ReadFileAsync("ctp_txn_20261015.csv"))[0].ConfirmationReason);
+    }
+
     [Theory]
     [InlineData("0", "USD")]
     [InlineData("12,50", "USD")]

@@ -38,7 +38,8 @@ One header row, then one row per successful `POST /api/checkout` (HTTP 200). Fai
 
 `/api/checkout` writes the last ten columns empty, because the PowerTranz payment happens after the checkout. The
 confirmation fills in the outcome from the result it receives (`approved`: 01/01/01, declined: 01/02/02;
-`responseMessage` → confirmation_reason; `authorizationCode` → network_authorization_code) and its own result.
+`responseMessage` → confirmation_reason; `authorizationCode` → network_authorization_code;
+`networkTransactionIdentifier` → network_transaction_identifier, `UNAVLB` when not sent) and its own result.
 
 Values that contain a comma, a quote or a line break are wrapped in double quotes (standard CSV, RFC 4180).
 See [sample-ctp_txn_20261012.csv](sample-ctp_txn_20261012.csv) for an example with fictitious data: an approved
@@ -49,7 +50,7 @@ its outcome by hand, one as `/api/checkout` writes it).
 
 ```bash
 curl -k -X POST https://localhost:7180/api/confirmations/<spiToken> -H "X-Api-Key: clicktopay-dev-key" \
-  -H "Content-Type: application/json" -d '{"approved":true,"authorizationCode":"123456","responseMessage":"Transaction is approved","networkTransactionIdentifier":"mastercard"}'
+  -H "Content-Type: application/json" -d '{"approved":true,"authorizationCode":"123456","responseMessage":"Transaction is approved"}'
 ```
 
 The API looks for the row whose `spitoken` is the one in the route, in every `ctp_txn_*.csv` of the folder, newest file

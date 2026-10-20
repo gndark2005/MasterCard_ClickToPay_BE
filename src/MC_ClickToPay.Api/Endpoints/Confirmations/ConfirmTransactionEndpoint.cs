@@ -24,7 +24,9 @@ public sealed class ConfirmTransactionRequest
     [JsonPropertyName("responseMessage")]
     public string? ResponseMessage { get; init; }
 
-    /// <summary>Required, e.g. "mastercard".</summary>
+    /// <summary>
+    /// Optional: the tracing value the payment network assigned in the authorization response. UNAVLB is sent when missing.
+    /// </summary>
     [JsonPropertyName("networkTransactionIdentifier")]
     public string? NetworkTransactionIdentifier { get; init; }
 
@@ -59,8 +61,9 @@ public sealed class ConfirmTransactionEndpoint(TransactionConfirmationService co
                 "POST /srci/api/checkout/confirmations its SrcCorrelationId, MerchantTransactionId, FlowId and amount " +
                 "with the payment outcome: checkoutEventType 01; checkoutEventStatus and confirmationStatus 01 when " +
                 "approved, 02 when not; responseMessage as confirmationReason; authorizationCode as " +
-                "networkAuthorizationCode. Required: approved, networkTransactionIdentifier (e.g. mastercard), and " +
-                "authorizationCode when approved is true (Mastercard rejects the confirmation without them). " +
+                "networkAuthorizationCode. Required: approved, and authorizationCode when approved is true. " +
+                "networkTransactionIdentifier is the tracing value the payment network assigned in the authorization " +
+                "response; when it is not sent, UNAVLB is sent, as Mastercard asks for an unknown value. " +
                 "The outcome and the result are written back to the row (outcome columns, " +
                 "confirmation_result, confirmation_date, confirmation_time, confirmation_detail) and to the database. " +
                 "A row already Confirmed is not sent again; a ConfirmationFailed row can be confirmed again.";
@@ -69,11 +72,10 @@ public sealed class ConfirmTransactionEndpoint(TransactionConfirmationService co
             {
                 Approved = true,
                 AuthorizationCode = "123456",
-                ResponseMessage = "Transaction is approved",
-                NetworkTransactionIdentifier = "mastercard"
+                ResponseMessage = "Transaction is approved"
             };
             s.Response<TransactionConfirmationResult>(200, "Mastercard accepted the confirmation. Headers: X-Src-Cx-Flow-Id, X-Correlation-Id.");
-            s.Response(400, "Invalid SPI token or body (approved, networkTransactionIdentifier or, when approved, authorizationCode missing), or Mastercard rejected the confirmation data (its reason code is included).");
+            s.Response(400, "Invalid SPI token or body (approved missing, authorizationCode missing on an approved payment, or a value with the wrong format), or Mastercard rejected the confirmation data (its reason code is included).");
             s.Response(401, "API key is missing, incorrect or not configured.");
             s.Response(404, "No transaction file row has this SPI token, or Mastercard did not find the checkout transaction.");
             s.Response(409, "The transaction was already confirmed, or another request is confirming it.");
@@ -145,14 +147,15 @@ public sealed class ConfirmTransactionValidator : Validator<ConfirmTransactionRe
     {
         RuleFor(x => x.SpiToken).NotEmpty().MaximumLength(2048);
         RuleFor(x => x.Approved).NotNull().WithMessage("approved is required: the PowerTranz Approved of the payment.");
-        // Mastercard rejects a confirmation without them (400 INVALID_ARGUMENT, sandbox 2026-10-20). A declined payment
-        // has no authorization code.
+        // A declined payment has no authorization code. Formats from Mastercard checkout1.0.yaml (ConfirmationData).
         RuleFor(x => x.AuthorizationCode).NotEmpty().When(x => x.Approved == true)
             .WithMessage("authorizationCode is required when approved is true: the PowerTranz AuthorizationCode.");
-        RuleFor(x => x.AuthorizationCode).MaximumLength(64);
+        RuleFor(x => x.AuthorizationCode).MaximumLength(25).Matches("^[0-9a-zA-Z]*$")
+            .WithMessage("authorizationCode must be up to 25 letters or digits.");
+        // Free text from PowerTranz: the service cleans it to Mastercard's 64 characters.
         RuleFor(x => x.ResponseMessage).MaximumLength(255);
-        RuleFor(x => x.NetworkTransactionIdentifier).NotEmpty()
-            .WithMessage("networkTransactionIdentifier is required, e.g. mastercard.");
-        RuleFor(x => x.NetworkTransactionIdentifier).MaximumLength(255);
+        // Optional: UNAVLB is sent when missing, as Mastercard asks for an unknown value.
+        RuleFor(x => x.NetworkTransactionIdentifier).MaximumLength(25).Matches("^[ A-Za-z0-9_-]*$")
+            .WithMessage("networkTransactionIdentifier must be up to 25 letters, digits, spaces, _ or -.");
     }
 }

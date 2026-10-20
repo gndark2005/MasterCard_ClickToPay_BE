@@ -219,18 +219,25 @@ curl -k -X POST https://localhost:7180/api/confirmations/<spiToken> -H "X-Api-Ke
 | Body field | Required | From PowerTranz | Sent to Mastercard as |
 |---|---|---|---|
 | `approved` | yes | `Approved` | `checkoutEventType` 01; `checkoutEventStatus` and `confirmationStatus` 01 (true) or 02 (false) |
-| `authorizationCode` | **yes when `approved` is true**, max 64 | `AuthorizationCode` | `networkAuthorizationCode` |
-| `responseMessage` | no, max 255 | `ResponseMessage` | `confirmationReason` |
-| `networkTransactionIdentifier` | **yes**, max 255 | - | `networkTransactionIdentifier` (`mastercard`) |
+| `authorizationCode` | **yes when `approved` is true**; up to 25 letters/digits | `AuthorizationCode` | `networkAuthorizationCode` |
+| `responseMessage` | no | `ResponseMessage` | `confirmationReason`: characters Mastercard does not accept are dropped and it is cut to 64 |
+| `networkTransactionIdentifier` | no; up to 25 of `A-Z a-z 0-9 space _ -` | (see below) | `networkTransactionIdentifier`; **`UNAVLB` when not sent** |
 
-All four are written to the transaction file row (`confirmation_reason`, `network_authorization_code`,
+What is sent is written to the transaction file row (`confirmation_reason`, `network_authorization_code`,
 `network_transaction_identifier` and the codes), also when Mastercard rejects the confirmation.
 
-Why `authorizationCode` and `networkTransactionIdentifier` are required: verified against the Mastercard sandbox on
-2026-10-20 with a real Click to Pay checkout and a PowerTranz approved payment, without them Mastercard answers
+**`networkTransactionIdentifier`.** Mastercard (`checkout1.0.yaml`, `ConfirmationData`): *"The unique authorisation
+related tracing value assigned by a Payment Network and provided in an authorisation response. Required only when
+checkoutEventType=01. If checkoutEventType=01 and the value of networkTransactionIdentifier is unknown, please pass
+UNAVLB."* The confirmation always sends `checkoutEventType` 01, so the API sends `UNAVLB` when the caller has no value.
+**Open question:** which PowerTranz `/spi/Payment` response field (if any) carries that network value, so the caller can
+send it. Ask PowerTranz.
+
+Verified against the Mastercard sandbox on 2026-10-20 with a real Click to Pay checkout and a PowerTranz approved
+payment: without `networkAuthorizationCode` and `networkTransactionIdentifier` Mastercard answers
 `400 [INVALID_ARGUMENT] One or more fields in the request are either missing or does not have correct value`; with
-them (`123456`, `mastercard`) it accepts the confirmation. The API now refuses the request itself (400) when they are
-missing, before calling Mastercard.
+them (`123456`, `mastercard`) it accepts the confirmation. Per the spec the missing required one is
+`networkTransactionIdentifier`, hence the `UNAVLB` default.
 
 1. Finds the row of the SPI token.
 2. Sends `SrcCorrelationId` (body `correlationId`), `MerchantTransactionId` (body and `merchant-transaction-id`
@@ -258,7 +265,7 @@ A `Confirmed` row is not sent again (409); a `ConfirmationFailed` row can be con
 | Status | When |
 |---|---|
 | 200 | Mastercard accepted it. Headers `X-Src-Cx-Flow-Id` (the flow id Mastercard returned) and `X-Correlation-Id` (the row's). |
-| 400 | SPI token longer than 2048; body without `approved` or `networkTransactionIdentifier`, approved without `authorizationCode`, or values too long; or Mastercard rejected the data (its reason code is in `detail`). |
+| 400 | SPI token longer than 2048; body without `approved`, approved without `authorizationCode`, or a value with the wrong format; or Mastercard rejected the data (its reason code is in `detail`). |
 | 401 | `X-Api-Key` missing or wrong. |
 | 404 | No row has this SPI token (`Transaction not found.`), or Mastercard did not find the checkout transaction. |
 | 409 | Already confirmed, or another request is confirming the same SPI token. |

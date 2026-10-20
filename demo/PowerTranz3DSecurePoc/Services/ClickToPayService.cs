@@ -85,8 +85,8 @@ public sealed class ClickToPayService : IDisposable
 
     /// <summary>
     /// Best effort: a failed confirmation is logged and never changes the payment outcome. The API finds the checkout
-    /// by the SPI token and sends Mastercard the PowerTranz result. Mastercard rejects a confirmation without
-    /// networkAuthorizationCode and networkTransactionIdentifier (400 INVALID_ARGUMENT, sandbox 2026-10-20).
+    /// by the SPI token and sends Mastercard the PowerTranz result. PowerTranz does not return the network's
+    /// transaction identifier, so none is sent and the API sends UNAVLB.
     /// </summary>
     public async Task ConfirmAsync(ClickToPayCheckout checkout, PaymentOutcome outcome, CancellationToken cancellationToken)
     {
@@ -101,7 +101,6 @@ public sealed class ClickToPayService : IDisposable
                 approved,
                 authorizationCode = response?.AuthorizationCode,
                 responseMessage = response?.ResponseMessage ?? outcome.Message,
-                networkTransactionIdentifier = "mastercard",
             }, cancellationToken);
             Console.WriteLine("Click to Pay confirmation sent to Mastercard.");
         }
