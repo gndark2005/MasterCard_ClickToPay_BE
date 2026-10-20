@@ -265,7 +265,9 @@ public sealed class CompleteCheckoutEndpointTests
         Assert.Equal(
             ["spi-token-1", "31.25", "USD", "823ef281-1a2e-4204-a69c-43d355522a35",
              "34f4a04b.2ce61515-55b7-4c09-845b-45492c2ef327", "0a4e0d3.34f4a04b.f91587770b3c99ce1090fe8a4f2a931b10d7acfc",
-             "34f4a04b.2ce61515-55b7-4c09-845b-45492c2ef327.1790888627", "7d1f6c2e-9a43-4b8e-b1a2-3f5c8e0d4a17"],
+             "34f4a04b.2ce61515-55b7-4c09-845b-45492c2ef327.1790888627", "7d1f6c2e-9a43-4b8e-b1a2-3f5c8e0d4a17",
+             // Payment outcome columns: unknown at checkout time.
+             "", "", "", "", "", ""],
             columns[2..]);
         // Never card data.
         Assert.DoesNotContain("5120350100064537", string.Join('\n', lines), StringComparison.Ordinal);
@@ -361,7 +363,7 @@ public sealed class CompleteCheckoutEndpointTests
             return error is null ? Task.FromResult(result!) : Task.FromException<CompleteCheckoutResult>(error);
         }
 
-        public Task ConfirmAsync(CheckoutConfirmationRequest request, CancellationToken cancellationToken = default) =>
-            Task.CompletedTask;
+        public Task<CheckoutConfirmationResult> ConfirmAsync(CheckoutConfirmationRequest request,
+            CancellationToken cancellationToken = default) => Task.FromResult(new CheckoutConfirmationResult());
     }
 }

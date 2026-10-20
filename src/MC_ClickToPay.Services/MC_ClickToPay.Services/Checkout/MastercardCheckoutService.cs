@@ -50,7 +50,7 @@ public sealed class MastercardCheckoutService(
         };
 
         var response = await SendAsync(CheckoutPath, body, request.FlowId, cancellationToken);
-        var json = JsonNode.Parse(response)
+        var json = JsonNode.Parse(response.Body)
             ?? throw new MastercardCheckoutException("Mastercard /checkout returned an empty body.");
 
         var encryptedPayload = json["encryptedPayload"]?.GetValue<string>();
@@ -71,30 +71,44 @@ public sealed class MastercardCheckoutService(
         };
     }
 
-    public async Task ConfirmAsync(CheckoutConfirmationRequest request, CancellationToken cancellationToken = default)
+    public async Task<CheckoutConfirmationResult> ConfirmAsync(
+        CheckoutConfirmationRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        var data = request.ConfirmationData ?? throw new ArgumentException("confirmationData is required.", nameof(request));
 
-        // Status codes as sent by the Mastercard sandbox reference client: "01" = success, "02" = failure.
-        var status = request.Approved ? "01" : "02";
-        var body = new JsonObject
+        // Body as in the Mastercard spec; optional fields are omitted when not given.
+        var confirmation = new JsonObject
         {
-            ["correlationId"] = request.CorrelationId,
-            ["merchantTransactionId"] = request.MerchantTransactionId,
-            ["confirmationData"] = new JsonObject
-            {
-                ["confirmationReason"] = request.ConfirmationReason
-                    ?? (request.Approved ? "Order Successfully Created" : "Payment Declined"),
-                ["transactionAmount"] = Amount(request.TransactionAmount, request.TransactionCurrencyCode),
-                ["confirmationTimestamp"] = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture),
-                ["networkTransactionIdentifier"] = "UNAVLB",
-                ["checkoutEventStatus"] = status,
-                ["checkoutEventType"] = "01",
-                ["confirmationStatus"] = status,
-            },
+            ["checkoutEventType"] = data.CheckoutEventType,
+            ["checkoutEventStatus"] = data.CheckoutEventStatus,
+            ["confirmationStatus"] = data.ConfirmationStatus,
         };
+        AddIfPresent(confirmation, "confirmationReason", data.ConfirmationReason);
+        confirmation["confirmationTimestamp"] = (data.ConfirmationTimestamp ?? DateTimeOffset.UtcNow).UtcDateTime
+            .ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
+        AddIfPresent(confirmation, "networkAuthorizationCode", data.NetworkAuthorizationCode);
+        AddIfPresent(confirmation, "networkTransactionIdentifier", data.NetworkTransactionIdentifier);
+        if (data.TransactionAmount is { } amount)
+        {
+            confirmation["transactionAmount"] = Amount(amount.Amount, amount.CurrencyCode);
+        }
 
-        await SendAsync(ConfirmationsPath, body, request.FlowId, cancellationToken);
+        var body = new JsonObject { ["correlationId"] = request.CorrelationId };
+        AddIfPresent(body, "merchantTransactionId", request.MerchantTransactionId);
+        body["confirmationData"] = confirmation;
+
+        var headers = new Dictionary<string, string?> { ["merchant-transaction-id"] = request.MerchantTransactionId };
+        var response = await SendAsync(ConfirmationsPath, body, request.FlowId, cancellationToken, headers);
+        return new CheckoutConfirmationResult { FlowId = response.FlowId ?? request.FlowId };
+    }
+
+    private static void AddIfPresent(JsonObject target, string name, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            target[name] = value;
+        }
     }
 
     private static JsonObject Amount(decimal amount, string currencyCode) => new()
@@ -103,8 +117,9 @@ public sealed class MastercardCheckoutService(
         ["transactionCurrencyCode"] = currencyCode,
     };
 
-    private async Task<string> SendAsync(
-        string path, JsonObject body, string? flowId, CancellationToken cancellationToken)
+    private async Task<MastercardResponse> SendAsync(
+        string path, JsonObject body, string? flowId, CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string?>? extraHeaders = null)
     {
         var settings = options.Value;
         if (!settings.IsConfigured)
@@ -130,6 +145,14 @@ public sealed class MastercardCheckoutService(
             message.Headers.Add("x-src-cx-flow-id", flowId);
         }
 
+        foreach (var (name, value) in extraHeaders ?? new Dictionary<string, string?>())
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                message.Headers.TryAddWithoutValidation(name, value);
+            }
+        }
+
         message.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         HttpResponseMessage response;
@@ -152,9 +175,14 @@ public sealed class MastercardCheckoutService(
                     $"Mastercard /{path} failed with HTTP {statusCode}. {DescribeError(text)}", statusCode);
             }
 
-            return text;
+            var responseFlowId = response.Headers.TryGetValues("X-Src-Cx-Flow-Id", out var values)
+                ? values.FirstOrDefault()
+                : null;
+            return new MastercardResponse(text, responseFlowId);
         }
     }
+
+    private sealed record MastercardResponse(string Body, string? FlowId);
 
     // Mastercard error bodies hold reason codes and descriptions only; anything else is reported by size.
     private static string DescribeError(string body)

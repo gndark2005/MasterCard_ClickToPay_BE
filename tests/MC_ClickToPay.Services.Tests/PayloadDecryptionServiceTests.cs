@@ -115,6 +115,8 @@ public sealed class PayloadDecryptionServiceTests
     [InlineData("")]
     [InlineData("header.payload.signature")]
     [InlineData("!.a.b.c.d")]
+    // One-character segments are not valid base64url (Base64Url.Decode throws ArgumentOutOfRangeException).
+    [InlineData("a.b.c.d.e")]
     public async Task RejectsInvalidInputWithoutResolvingKey(string input)
     {
         var exception = await Assert.ThrowsAsync<PayloadDecryptionException>(() =>

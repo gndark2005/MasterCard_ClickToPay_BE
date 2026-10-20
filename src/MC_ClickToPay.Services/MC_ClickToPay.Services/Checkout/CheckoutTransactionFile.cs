@@ -5,8 +5,8 @@ using Microsoft.Extensions.Options;
 namespace MC_ClickToPay.Services.Checkout;
 
 /// <summary>
-/// Daily CSV of successful /checkout decryptions, read by the batch process that calls Mastercard
-/// /checkout/confirmations outside the checkout. One file per day: ctp_txn_YYYYMMDD.csv.
+/// Daily CSV of successful /checkout decryptions. Once its outcome columns are filled in, it is uploaded to
+/// POST /api/checkout/confirmations, which confirms every row to Mastercard. One file per day: ctp_txn_YYYYMMDD.csv.
 /// </summary>
 public interface ICheckoutTransactionFile
 {
@@ -28,8 +28,16 @@ public sealed class CheckoutTransactionFileOptions
 public sealed class CsvCheckoutTransactionFile(IOptions<CheckoutTransactionFileOptions> options, TimeProvider time)
     : ICheckoutTransactionFile
 {
+    /// <summary>
+    /// The last six columns are the payment outcome for /checkout/confirmations. They are written empty, because the
+    /// outcome is not known yet when /api/checkout answers, and must be filled in after the PowerTranz payment.
+    /// </summary>
     public const string Header =
-        "date,time,spitoken,transaction_amount,transaction_currency,SrcDpaId,SrcCorrelationId,MerchantTransactionId,FlowId,XCorrelationId";
+        "date,time,spitoken,transaction_amount,transaction_currency,SrcDpaId,SrcCorrelationId,MerchantTransactionId,FlowId,XCorrelationId," +
+        "checkout_event_type,checkout_event_status,confirmation_status,confirmation_reason,network_authorization_code,network_transaction_identifier";
+
+    // One empty value per outcome column.
+    private const string EmptyOutcome = ",,,,,,";
 
     private readonly SemaphoreSlim gate = new(1, 1);
 
@@ -49,7 +57,7 @@ public sealed class CsvCheckoutTransactionFile(IOptions<CheckoutTransactionFileO
             Escape(request.SrcCorrelationId),
             Escape(request.MerchantTransactionId),
             Escape(request.FlowId),
-            Escape(request.XCorrelationId));
+            Escape(request.XCorrelationId)) + EmptyOutcome;
 
         var directory = options.Value.Directory;
         var path = Path.Combine(directory, FileName(now));

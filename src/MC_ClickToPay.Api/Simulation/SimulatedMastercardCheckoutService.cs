@@ -34,9 +34,10 @@ public sealed class SimulatedMastercardCheckoutService(ILogger<SimulatedMasterca
         });
     }
 
-    public Task ConfirmAsync(CheckoutConfirmationRequest request, CancellationToken cancellationToken = default)
+    public Task<CheckoutConfirmationResult> ConfirmAsync(CheckoutConfirmationRequest request, CancellationToken cancellationToken = default)
     {
-        logger.LogWarning("SIMULATED Mastercard /checkout/confirmations for {CorrelationId}.", request.CorrelationId);
-        return Task.CompletedTask;
+        logger.LogWarning("SIMULATED Mastercard /checkout/confirmations for {CorrelationId}: no call was made to Mastercard.",
+            request.CorrelationId);
+        return Task.FromResult(new CheckoutConfirmationResult { FlowId = request.FlowId });
     }
 }

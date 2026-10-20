@@ -79,26 +79,100 @@ public sealed class MastercardCheckoutServiceTests
     }
 
     [Fact]
-    public async Task ConfirmSendsConfirmationStatus()
+    public async Task ConfirmSendsTheMastercardBodyAndHeadersAndReturnsTheFlowId()
     {
         using var payloadKey = RSA.Create(2048);
-        var handler = new FakeHandler(HttpStatusCode.OK, "{}");
-
-        await Service(handler, payloadKey).ConfirmAsync(new CheckoutConfirmationRequest
+        var handler = new FakeHandler(HttpStatusCode.NoContent, string.Empty)
         {
-            CorrelationId = "corr-1",
-            MerchantTransactionId = "mtid-1",
-            TransactionAmount = 31.25m,
-            TransactionCurrencyCode = "USD",
-            Approved = false,
-        });
+            ResponseFlowId = "flow-from-mastercard"
+        };
 
+        var result = await Service(handler, payloadKey).ConfirmAsync(Confirmation());
+
+        Assert.Equal("flow-from-mastercard", result.FlowId);
         var request = Assert.Single(handler.Requests);
         Assert.Equal("https://sandbox.api.mastercard.com/srci/api/checkout/confirmations", request.Uri);
-        var data = JsonNode.Parse(request.Body)!["confirmationData"]!;
-        Assert.Equal("02", data["confirmationStatus"]!.GetValue<string>());
-        Assert.Equal("31.25", data["transactionAmount"]!["transactionAmount"]!.GetValue<string>());
+        Assert.StartsWith("OAuth ", request.Authorization);
+        Assert.Equal("client-id", request.ClientId);
+        Assert.Equal("flow-1", request.FlowId);
+        Assert.Equal("0a4e0d3.34f4a04b.bddaa2cf22b394705447f2b03ca662eb86d0b253", request.MerchantTransactionId);
+
+        var body = JsonNode.Parse(request.Body)!;
+        Assert.Equal("43465920-50e4-475f-a8d8-198a842fd3bf", body["correlationId"]!.GetValue<string>());
+        Assert.Equal("0a4e0d3.34f4a04b.bddaa2cf22b394705447f2b03ca662eb86d0b253", body["merchantTransactionId"]!.GetValue<string>());
+        var data = body["confirmationData"]!;
+        Assert.Equal("01", data["checkoutEventType"]!.GetValue<string>());
+        Assert.Equal("01", data["checkoutEventStatus"]!.GetValue<string>());
+        Assert.Equal("01", data["confirmationStatus"]!.GetValue<string>());
+        Assert.Equal("The payment was successful", data["confirmationReason"]!.GetValue<string>());
+        Assert.Equal("2020-04-25T01:15:00.000Z", data["confirmationTimestamp"]!.GetValue<string>());
+        Assert.Equal("2020404", data["networkAuthorizationCode"]!.GetValue<string>());
+        Assert.Equal("mastercard", data["networkTransactionIdentifier"]!.GetValue<string>());
+        Assert.Equal("1200.00", data["transactionAmount"]!["transactionAmount"]!.GetValue<string>());
+        Assert.Equal("USD", data["transactionAmount"]!["transactionCurrencyCode"]!.GetValue<string>());
+        Assert.DoesNotContain("x-corr-1", request.Body);
+        Assert.Null(body["flowId"]);
     }
+
+    [Fact]
+    public async Task ConfirmOmitsOptionalFieldsAndDefaultsTheTimestamp()
+    {
+        using var payloadKey = RSA.Create(2048);
+        var handler = new FakeHandler(HttpStatusCode.NoContent, string.Empty);
+
+        var result = await Service(handler, payloadKey).ConfirmAsync(new CheckoutConfirmationRequest
+        {
+            CorrelationId = "corr-1",
+            FlowId = "flow-1",
+            XCorrelationId = "x-corr-1",
+            ConfirmationData = new ConfirmationData { CheckoutEventType = "01", CheckoutEventStatus = "01", ConfirmationStatus = "01" }
+        });
+
+        Assert.Equal("flow-1", result.FlowId);
+        var request = Assert.Single(handler.Requests);
+        Assert.Null(request.MerchantTransactionId);
+        var body = JsonNode.Parse(request.Body)!;
+        Assert.Null(body["merchantTransactionId"]);
+        var data = body["confirmationData"]!.AsObject();
+        Assert.False(data.ContainsKey("transactionAmount"));
+        Assert.False(data.ContainsKey("networkAuthorizationCode"));
+        Assert.True(DateTimeOffset.TryParse(data["confirmationTimestamp"]!.GetValue<string>(), out var timestamp));
+        Assert.True(DateTimeOffset.UtcNow - timestamp < TimeSpan.FromMinutes(1));
+    }
+
+    [Fact]
+    public async Task ConfirmReportsMastercardStatusCode()
+    {
+        using var payloadKey = RSA.Create(2048);
+        var handler = new FakeHandler(HttpStatusCode.NotFound,
+            """{"errors":[{"reasonCode":"NOT_FOUND","description":"Checkout transaction not found"}]}""");
+
+        var exception = await Assert.ThrowsAsync<MastercardCheckoutException>(() =>
+            Service(handler, payloadKey).ConfirmAsync(Confirmation()));
+
+        Assert.Equal(404, exception.StatusCode);
+        Assert.Contains("[NOT_FOUND] Checkout transaction not found", exception.Message);
+    }
+
+    // Mastercard's request sample.
+    private static CheckoutConfirmationRequest Confirmation() => new()
+    {
+        CorrelationId = "43465920-50e4-475f-a8d8-198a842fd3bf",
+        MerchantTransactionId = "0a4e0d3.34f4a04b.bddaa2cf22b394705447f2b03ca662eb86d0b253",
+        FlowId = "flow-1",
+        XCorrelationId = "x-corr-1",
+        ConfirmationData = new ConfirmationData
+        {
+            CheckoutEventType = "01",
+            CheckoutEventStatus = "01",
+            ConfirmationStatus = "01",
+            ConfirmationReason = "The payment was successful",
+            ConfirmationTimestamp = DateTimeOffset.Parse("2020-04-25T01:15:00.000Z", System.Globalization.CultureInfo.InvariantCulture),
+            NetworkAuthorizationCode = "2020404",
+            NetworkTransactionIdentifier = "mastercard",
+            TransactionAmount = new ConfirmationAmount { Amount = 1200m, CurrencyCode = "USD" }
+        }
+    };
 
     private static CompleteCheckoutRequest Request() => new()
     {
@@ -118,11 +192,15 @@ public sealed class MastercardCheckoutServiceTests
         new TestSigningKeyProvider(),
         new PayloadDecryptionService(new TestKeyProvider(payloadKey.ExportParameters(true))));
 
-    private sealed record CapturedRequest(string Uri, string Authorization, string? ClientId, string? FlowId, string Body);
+    private sealed record CapturedRequest(
+        string Uri, string Authorization, string? ClientId, string? FlowId, string? MerchantTransactionId, string Body);
 
     private sealed class FakeHandler(HttpStatusCode status, string responseBody) : HttpMessageHandler
     {
         public List<CapturedRequest> Requests { get; } = [];
+
+        /// <summary>X-Src-Cx-Flow-Id header of the response, when set.</summary>
+        public string? ResponseFlowId { get; init; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -134,8 +212,15 @@ public sealed class MastercardCheckoutServiceTests
                 Header(request, "Authorization") ?? string.Empty,
                 Header(request, "x-openapi-clientid"),
                 Header(request, "x-src-cx-flow-id"),
+                Header(request, "merchant-transaction-id"),
                 await request.Content!.ReadAsStringAsync(cancellationToken)));
-            return new HttpResponseMessage(status) { Content = new StringContent(responseBody, Encoding.UTF8, "application/json") };
+            var response = new HttpResponseMessage(status) { Content = new StringContent(responseBody, Encoding.UTF8, "application/json") };
+            if (ResponseFlowId is not null)
+            {
+                response.Headers.Add("X-Src-Cx-Flow-Id", ResponseFlowId);
+            }
+
+            return response;
         }
     }
 

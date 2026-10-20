@@ -8,7 +8,8 @@ using MC_ClickToPay.Services.Exceptions;
 namespace MC_ClickToPay.Api.Endpoints.Checkout;
 
 public sealed class CompleteCheckoutEndpoint(
-    IMastercardCheckoutService checkout, ICheckoutTransactionFile transactions, ILogger<CompleteCheckoutEndpoint> logger)
+    IMastercardCheckoutService checkout, ICheckoutTransactionFile transactions, CheckoutStateRecorder state,
+    ILogger<CompleteCheckoutEndpoint> logger)
     : Endpoint<CompleteCheckoutRequest, CompleteCheckoutResponse>
 {
     public override void Configure()
@@ -59,7 +60,8 @@ public sealed class CompleteCheckoutEndpoint(
                 payload.DynamicData?.DynamicDataType ?? "-", result.Eci ?? "-");
             var response = CompleteCheckoutResponse.From(payload);
 
-            // For the confirmation batch: recorded only once the 200 has been sent, so the file never delays or fails it.
+            // Pending state (database) and confirmation batch (file): recorded only once the 200 has been sent, so
+            // neither ever delays or fails it.
             HttpContext.Response.OnCompleted(() => RecordTransactionAsync(request));
             await Send.OkAsync(response, ct);
         }
@@ -71,6 +73,8 @@ public sealed class CompleteCheckoutEndpoint(
 
     private async Task RecordTransactionAsync(CompleteCheckoutRequest request)
     {
+        // Never throws: a database error is logged with the ids.
+        await state.CheckoutAsync(request);
         try
         {
             await transactions.AppendAsync(request);

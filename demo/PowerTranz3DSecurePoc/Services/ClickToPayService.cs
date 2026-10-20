@@ -91,14 +91,22 @@ public sealed class ClickToPayService : IDisposable
         Console.WriteLine($"POST {_httpClient.BaseAddress}api/checkout/confirmations (approved={approved})");
         try
         {
+            // Codes as in Mastercard's sample: "01" for the event; confirmationStatus "01" success, "02" failure.
+            var status = approved ? "01" : "02";
             await PostAsync("api/checkout/confirmations", new
             {
                 correlationId = checkout.CorrelationId,
                 merchantTransactionId = checkout.MerchantTransactionId,
                 flowId = checkout.FlowId,
-                transactionAmount = decimal.Round(amount, 2),
-                transactionCurrencyCode = currency,
-                approved,
+                xCorrelationId = Guid.NewGuid().ToString(),
+                confirmationData = new
+                {
+                    checkoutEventType = "01",
+                    checkoutEventStatus = status,
+                    confirmationStatus = status,
+                    confirmationReason = approved ? "The payment was successful" : "The payment was declined",
+                    transactionAmount = new { transactionAmount = decimal.Round(amount, 2), transactionCurrencyCode = currency },
+                },
             }, cancellationToken);
             Console.WriteLine("Click to Pay confirmation sent to Mastercard.");
         }

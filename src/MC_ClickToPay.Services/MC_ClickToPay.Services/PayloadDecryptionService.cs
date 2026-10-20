@@ -80,7 +80,8 @@ public sealed class PayloadDecryptionService(IPayloadDecryptionKeyProvider keyPr
                 throw new PayloadDecryptionException(PayloadDecryptionError.UnsupportedHeader);
             }
         }
-        catch (Exception ex) when (ex is JsonException or FormatException or InvalidOperationException)
+        // Base64Url.Decode throws ArgumentOutOfRangeException for an impossible length (e.g. a one-character segment).
+        catch (Exception ex) when (ex is JsonException or FormatException or InvalidOperationException or ArgumentException)
         {
             throw new PayloadDecryptionException(PayloadDecryptionError.InvalidInput);
         }

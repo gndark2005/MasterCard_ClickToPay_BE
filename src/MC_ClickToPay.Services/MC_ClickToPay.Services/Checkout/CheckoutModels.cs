@@ -58,26 +58,80 @@ public sealed class CompleteCheckoutResult
     public required DecryptedPayloadDto Payload { get; init; }
 }
 
+/// <summary>
+/// Body of POST /api/checkout/confirmations: the Mastercard /checkout/confirmations body (correlationId,
+/// merchantTransactionId, confirmationData) plus the two values Mastercard takes as headers (flowId →
+/// X-Src-Cx-Flow-Id, merchantTransactionId → merchant-transaction-id) and the caller's own tracing id.
+/// </summary>
 public sealed class CheckoutConfirmationRequest
 {
+    /// <summary>The srcCorrelationId of the checkout (checkoutWithCard() / POST /api/checkout).</summary>
     [JsonPropertyName("correlationId")]
     public string CorrelationId { get; init; } = string.Empty;
 
+    /// <summary>Sent in the body and in the merchant-transaction-id header. Optional for subsequent payments.</summary>
     [JsonPropertyName("merchantTransactionId")]
-    public string MerchantTransactionId { get; init; } = string.Empty;
+    public string? MerchantTransactionId { get; init; }
 
+    /// <summary>X-Src-Cx-Flow-Id of the checkout, so Mastercard routes the call to the same server.</summary>
     [JsonPropertyName("flowId")]
     public string? FlowId { get; init; }
 
-    [JsonPropertyName("transactionAmount")]
-    public decimal TransactionAmount { get; init; }
+    /// <summary>The caller's own tracing id: logged and echoed in the X-Correlation-Id response header, not sent to Mastercard.</summary>
+    [JsonPropertyName("xCorrelationId")]
+    public string XCorrelationId { get; init; } = string.Empty;
 
-    [JsonPropertyName("transactionCurrencyCode")]
-    public string TransactionCurrencyCode { get; init; } = string.Empty;
+    [JsonPropertyName("confirmationData")]
+    public ConfirmationData? ConfirmationData { get; init; }
+}
 
-    [JsonPropertyName("approved")]
-    public bool Approved { get; init; }
+/// <summary>Mastercard ConfirmationData: the outcome of the checkout or payment, sent as is.</summary>
+public sealed class ConfirmationData
+{
+    /// <summary>Two-digit code, e.g. "01".</summary>
+    [JsonPropertyName("checkoutEventType")]
+    public string CheckoutEventType { get; init; } = string.Empty;
+
+    /// <summary>Two-digit code, e.g. "01".</summary>
+    [JsonPropertyName("checkoutEventStatus")]
+    public string CheckoutEventStatus { get; init; } = string.Empty;
+
+    /// <summary>Two-digit code, e.g. "01".</summary>
+    [JsonPropertyName("confirmationStatus")]
+    public string ConfirmationStatus { get; init; } = string.Empty;
 
     [JsonPropertyName("confirmationReason")]
     public string? ConfirmationReason { get; init; }
+
+    /// <summary>ISO 8601. Optional here: the current UTC time is sent when omitted.</summary>
+    [JsonPropertyName("confirmationTimestamp")]
+    public DateTimeOffset? ConfirmationTimestamp { get; init; }
+
+    /// <summary>Authorization code returned by the processor (e.g. PowerTranz AuthorizationCode).</summary>
+    [JsonPropertyName("networkAuthorizationCode")]
+    public string? NetworkAuthorizationCode { get; init; }
+
+    [JsonPropertyName("networkTransactionIdentifier")]
+    public string? NetworkTransactionIdentifier { get; init; }
+
+    [JsonPropertyName("transactionAmount")]
+    public ConfirmationAmount? TransactionAmount { get; init; }
+}
+
+public sealed class ConfirmationAmount
+{
+    /// <summary>A JSON number or a string as in Mastercard's sample ("1200"); sent with two decimals.</summary>
+    [JsonPropertyName("transactionAmount")]
+    [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
+    public decimal Amount { get; init; }
+
+    /// <summary>ISO 4217 alphabetic code, e.g. "USD".</summary>
+    [JsonPropertyName("transactionCurrencyCode")]
+    public string CurrencyCode { get; init; } = string.Empty;
+}
+
+public sealed class CheckoutConfirmationResult
+{
+    /// <summary>X-Src-Cx-Flow-Id returned by Mastercard: the one to use in later calls for this checkout.</summary>
+    public string? FlowId { get; init; }
 }

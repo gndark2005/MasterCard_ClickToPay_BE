@@ -200,22 +200,89 @@ request only, is never logged, and must not be cached or stored by the caller.
 | 502 | Mastercard rejected the call or could not be reached (e.g. expired ids, invalid signature); its reason code is included. |
 | 503 | Signing key or Payload Encryption key not configured or unreadable. |
 
-The payment flow (validation, PowerTranz/simulated processor) stays in `MC_ClickToPay.Services/Payments` for the
-upcoming confirmation endpoint; `IMastercardCheckoutService.ConfirmAsync` (Mastercard `/checkout/confirmations`) too.
+The payment flow (validation, PowerTranz/simulated processor) stays in `MC_ClickToPay.Services/Payments`.
+
+### POST /api/checkout/confirmations
+
+Reports the outcome of the checkout or payment to Mastercard `POST /srci/api/checkout/confirmations` (OAuth 1.0a,
+same credentials as `/api/checkout`). Two forms of body:
+
+- **One confirmation**, `application/json` (below): returns 204.
+- **Batch**, `multipart/form-data` with the daily transaction file in the optional `file` field: every row is confirmed
+  and the response is 200 with one result per row (`Confirmed`, `Failed`, `Invalid`, `Skipped`). See
+  [ctp-transaction-file.md](../../docs/ctp-transaction-file.md) for the columns, the outcome to fill in and the response.
+  Up to 10 MiB (this route only; the API default is 256 KiB) and 10,000 rows.
+
+```bash
+curl -k -X POST https://localhost:7180/api/checkout/confirmations -H "X-Api-Key: clicktopay-dev-key" \
+  -F "file=@ctp_txn_20261012.csv;type=text/csv"
+```
+
+The JSON body is Mastercard's, plus `flowId` and `xCorrelationId`:
+
+```json
+{
+  "correlationId": "43465920-50e4-475f-a8d8-198a842fd3bf",
+  "merchantTransactionId": "0a4e0d3.34f4a04b.bddaa2cf22b394705447f2b03ca662eb86d0b253",
+  "flowId": "34f4a04b.2ce61515-55b7-4c09-845b-45492c2ef327.1790888627",
+  "xCorrelationId": "7d1f6c2e-9a43-4b8e-b1a2-3f5c8e0d4a17",
+  "confirmationData": {
+    "checkoutEventType": "01",
+    "checkoutEventStatus": "01",
+    "confirmationStatus": "01",
+    "confirmationReason": "The payment was successful",
+    "confirmationTimestamp": "2026-10-15T01:15:00.000Z",
+    "networkAuthorizationCode": "123456",
+    "networkTransactionIdentifier": "mastercard",
+    "transactionAmount": { "transactionAmount": "31.25", "transactionCurrencyCode": "USD" }
+  }
+}
+```
+
+| Field | Required | Sent to Mastercard as |
+|---|---|---|
+| `correlationId` | yes | body `correlationId` (the checkout's `srcCorrelationId`) |
+| `merchantTransactionId` | no (up to 255) | body `merchantTransactionId` and `merchant-transaction-id` header |
+| `flowId` | no | `X-Src-Cx-Flow-Id` header |
+| `xCorrelationId` | yes | not sent; logged and echoed in `X-Correlation-Id` |
+| `confirmationData.checkoutEventType`, `checkoutEventStatus`, `confirmationStatus` | yes, two digits | as is |
+| `confirmationData.confirmationTimestamp` | no | as is in UTC; now when omitted |
+| `confirmationData.transactionAmount` | no | amount with two decimals (number or string accepted) and ISO alphabetic currency |
+| other `confirmationData` fields | no | as is; omitted when empty |
+
+| Status | When |
+|---|---|
+| 204 | Mastercard accepted it. `X-Src-Cx-Flow-Id` holds the flow id Mastercard returned (use it in later calls). |
+| 400 | Invalid request, or Mastercard rejected the data (its reason code is in `detail`). |
+| 401 | `X-Api-Key` missing or wrong. |
+| 404 | Mastercard did not find the checkout transaction. |
+| 502 | Mastercard unreachable, 5xx, or it refused the integration credentials / DPA (401/403). |
+| 503 | Signing key not configured or unreadable. |
+
+Verified against the Mastercard sandbox on 2026-10-15: the signed call reaches `/checkout/confirmations` and an
+unknown `correlationId` returns `404 [NOT_FOUND] Transaction data not found`.
+
+### Checkout state database (MySQL)
+
+With `ConnectionStrings:ClickToPay` set, every checkout is recorded in MySQL (`checkout_transactions`) as `Pending`,
+and every confirmation (JSON or batch) moves it to `Confirmed` or `ConfirmationFailed`. The table is created at
+startup; the database never fails a request. Setup, local portable MySQL and queries:
+[docs/db/README.md](../../docs/db/README.md).
 
 ### Daily transaction file (for the confirmation batch)
 
-Mastercard `/checkout/confirmations` is called by a batch process, outside the checkout. For it, every successful
-`POST /api/checkout` (HTTP 200) appends one row to a daily CSV, **after** the response has been sent, so the file never
-delays or fails the checkout. Failed checkouts are not written; a row that cannot be written is logged as an error
-with its `srcCorrelationId` and `xCorrelationId`.
+Mastercard `/checkout/confirmations` is called outside the checkout, by uploading the day's file to
+`POST /api/checkout/confirmations`. For it, every successful `POST /api/checkout` (HTTP 200) appends one row to a daily
+CSV, **after** the response has been sent, so the file never delays or fails the checkout. Failed checkouts are not
+written; a row that cannot be written is logged as an error with its `srcCorrelationId` and `xCorrelationId`.
 
 - Folder: `CheckoutTransactionFile:Directory` (default `transactions`, relative to the content root).
-- File: `ctp_txn_YYYYMMDD.csv`, one per day (server local time), with a header row:
+- File: `ctp_txn_YYYYMMDD.csv`, one per day (server local time), with a header row. The last six columns are the
+  payment outcome: written empty, to be filled in after the PowerTranz payment and before the upload.
 
 ```text
-date,time,spitoken,transaction_amount,transaction_currency,SrcDpaId,SrcCorrelationId,MerchantTransactionId,FlowId,XCorrelationId
-20261012,090507,<spiToken>,31.25,USD,823ef281-...,34f4a04b.2ce61515-...,0a4e0d3.34f4a04b...,34f4a04b...1790888627,7d1f6c2e-...
+date,time,spitoken,transaction_amount,transaction_currency,SrcDpaId,SrcCorrelationId,MerchantTransactionId,FlowId,XCorrelationId,checkout_event_type,checkout_event_status,confirmation_status,confirmation_reason,network_authorization_code,network_transaction_identifier
+20261012,090507,<spiToken>,31.25,USD,823ef281-...,34f4a04b.2ce61515-...,0a4e0d3.34f4a04b...,34f4a04b...1790888627,7d1f6c2e-...,,,,,,
 ```
 
 `date` is `YYYYMMDD`, `time` `HHMMSS`; values with a comma or quote are quoted (RFC 4180). No card data is written,

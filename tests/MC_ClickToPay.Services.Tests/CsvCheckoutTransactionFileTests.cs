@@ -17,8 +17,9 @@ public sealed class CsvCheckoutTransactionFileTests : IDisposable
         var lines = await System.IO.File.ReadAllLinesAsync(Path.Combine(directory, "ctp_txn_20261012.csv"));
         Assert.Equal(
         [
-            "date,time,spitoken,transaction_amount,transaction_currency,SrcDpaId,SrcCorrelationId,MerchantTransactionId,FlowId,XCorrelationId",
-            "20261012,090507,spi-token-1,31.25,USD,dpa-1,corr-1,mtid-1,flow-1,x-corr-1"
+            "date,time,spitoken,transaction_amount,transaction_currency,SrcDpaId,SrcCorrelationId,MerchantTransactionId,FlowId,XCorrelationId," +
+            "checkout_event_type,checkout_event_status,confirmation_status,confirmation_reason,network_authorization_code,network_transaction_identifier",
+            "20261012,090507,spi-token-1,31.25,USD,dpa-1,corr-1,mtid-1,flow-1,x-corr-1,,,,,,"
         ], lines);
     }
 
@@ -53,7 +54,7 @@ public sealed class CsvCheckoutTransactionFileTests : IDisposable
         await File().AppendAsync(Request(spiToken: "a,b\"c"));
 
         var lines = await System.IO.File.ReadAllLinesAsync(Path.Combine(directory, "ctp_txn_20261012.csv"));
-        Assert.Equal("20261012,090507,\"a,b\"\"c\",31.25,USD,dpa-1,corr-1,mtid-1,flow-1,x-corr-1", lines[1]);
+        Assert.Equal("20261012,090507,\"a,b\"\"c\",31.25,USD,dpa-1,corr-1,mtid-1,flow-1,x-corr-1,,,,,,", lines[1]);
     }
 
     [Fact]
@@ -64,7 +65,7 @@ public sealed class CsvCheckoutTransactionFileTests : IDisposable
 
         var lines = await System.IO.File.ReadAllLinesAsync(Path.Combine(directory, "ctp_txn_20261012.csv"));
         Assert.Equal(51, lines.Length);
-        Assert.All(lines.Skip(1), line => Assert.Equal(10, line.Split(',').Length));
+        Assert.All(lines.Skip(1), line => Assert.Equal(16, line.Split(',').Length));
     }
 
     public void Dispose()

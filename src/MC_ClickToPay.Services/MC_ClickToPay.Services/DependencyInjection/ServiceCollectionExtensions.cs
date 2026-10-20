@@ -20,8 +20,8 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers the server-side Click to Pay client (/checkout and /checkout/confirmations) and the daily
-    /// transaction file read by the confirmation batch. Requires
+    /// Registers the server-side Click to Pay client (/checkout and /checkout/confirmations), the daily
+    /// transaction file and the confirmation batch that processes it. Requires
     /// <see cref="AddMastercardPayloadDecryption{TKeyProvider}"/>; the API configures <see cref="MastercardCheckoutOptions"/>.
     /// </summary>
     public static IServiceCollection AddMastercardCheckout<TSigningKeyProvider>(this IServiceCollection services)
@@ -32,6 +32,28 @@ public static class ServiceCollectionExtensions
             client => client.Timeout = TimeSpan.FromSeconds(30));
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ICheckoutTransactionFile, CsvCheckoutTransactionFile>();
+        services.TryAddScoped<CheckoutConfirmationBatch>();
+        services.TryAddSingleton<ICheckoutTransactionStore, NoCheckoutTransactionStore>();
+        services.TryAddScoped<CheckoutStateRecorder>();
+        return services;
+    }
+
+    /// <summary>
+    /// Records checkout state in MySQL (table checkout_transactions; the API creates it at startup with
+    /// <see cref="MySqlCheckoutTransactionStore.EnsureSchemaAsync"/>). Without a connection string nothing is recorded
+    /// and the API works as before. Call it before <see cref="AddMastercardCheckout{T}"/>.
+    /// </summary>
+    public static IServiceCollection AddCheckoutDatabase(this IServiceCollection services, string? connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return services;
+        }
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton(_ => new MySqlConnector.MySqlDataSource(connectionString));
+        services.AddSingleton<MySqlCheckoutTransactionStore>();
+        services.AddSingleton<ICheckoutTransactionStore>(sp => sp.GetRequiredService<MySqlCheckoutTransactionStore>());
         return services;
     }
 
