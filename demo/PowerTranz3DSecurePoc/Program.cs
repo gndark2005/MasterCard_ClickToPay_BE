@@ -155,7 +155,7 @@ static async Task<PaymentOutcome> RunClickToPayPaymentAsync(PowerTranzService po
     var outcome = await RunPaymentAsync(powerTranz, browser.RunInIframeAsync, amount, payment.Card, payment.Billing,
         cancellationToken, payment.ExtraSourceFields);
     if (outcome.Kind != OutcomeKind.Cancelled)
-        await clickToPay.ConfirmAsync(checkout, amount, currency, outcome.Kind == OutcomeKind.Approved, cancellationToken);
+        await clickToPay.ConfirmAsync(checkout, outcome.Kind == OutcomeKind.Approved, cancellationToken);
     return outcome;
 }
 

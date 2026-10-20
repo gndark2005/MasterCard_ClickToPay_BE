@@ -11,8 +11,8 @@ public sealed record ClickToPayPayment(CardOptions Card, SaleBillingAddress Bill
 
 /// <summary>
 /// Calls MasterCard_ClickToPay_BE: /api/checkout (Mastercard /checkout + decryption) and
-/// /api/checkout/confirmations (removed from the API until the new confirmation endpoint exists; the call is best effort
-/// and only logs a warning), and maps the decrypted payload to the PowerTranz Sale request.
+/// /api/confirmations/{spiToken} (best effort: only logs a warning), and maps the decrypted payload to the PowerTranz
+/// Sale request.
 /// </summary>
 public sealed class ClickToPayService : IDisposable
 {
@@ -33,13 +33,13 @@ public sealed class ClickToPayService : IDisposable
 
     public bool SwaggerHandOff => _options.SwaggerHandOff;
 
-    // This demo runs PowerTranz SPI after /api/checkout, so it has no SpiToken yet: the API only requires one
-    // (it does not use it), so a placeholder is sent.
-    private const string DemoSpiToken = "poc-no-spi-token-yet";
+    // This demo runs PowerTranz SPI after /api/checkout, so it has no SpiToken yet. A placeholder unique to the
+    // checkout is sent instead: the API writes it to the transaction file row, and the confirmation finds the row by it.
+    private static string DemoSpiToken(ClickToPayCheckout checkout) => $"poc-{checkout.CorrelationId}";
 
     private object CheckoutBody(ClickToPayCheckout checkout, decimal amount, string currency) => new
     {
-        spiToken = DemoSpiToken,
+        spiToken = DemoSpiToken(checkout),
         srcDpaId = _options.SrcDpaId,
         srcCorrelationId = checkout.CorrelationId,
         merchantTransactionId = checkout.MerchantTransactionId,
@@ -83,30 +83,20 @@ public sealed class ClickToPayService : IDisposable
         }
     }
 
-    /// <summary>Best effort: a failed confirmation is logged and never changes the payment outcome.</summary>
-    public async Task ConfirmAsync(ClickToPayCheckout checkout, decimal amount, string currency, bool approved,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// Best effort: a failed confirmation is logged and never changes the payment outcome. The API finds the checkout
+    /// by the SPI token and sends Mastercard the payment result given here.
+    /// </summary>
+    public async Task ConfirmAsync(ClickToPayCheckout checkout, bool approved, CancellationToken cancellationToken)
     {
         Console.WriteLine();
-        Console.WriteLine($"POST {_httpClient.BaseAddress}api/checkout/confirmations (approved={approved})");
+        Console.WriteLine($"POST {_httpClient.BaseAddress}api/confirmations/{{spiToken}} (approved={approved})");
         try
         {
-            // Codes as in Mastercard's sample: "01" for the event; confirmationStatus "01" success, "02" failure.
-            var status = approved ? "01" : "02";
-            await PostAsync("api/checkout/confirmations", new
+            await PostAsync($"api/confirmations/{Uri.EscapeDataString(DemoSpiToken(checkout))}", new
             {
-                correlationId = checkout.CorrelationId,
-                merchantTransactionId = checkout.MerchantTransactionId,
-                flowId = checkout.FlowId,
-                xCorrelationId = Guid.NewGuid().ToString(),
-                confirmationData = new
-                {
-                    checkoutEventType = "01",
-                    checkoutEventStatus = status,
-                    confirmationStatus = status,
-                    confirmationReason = approved ? "The payment was successful" : "The payment was declined",
-                    transactionAmount = new { transactionAmount = decimal.Round(amount, 2), transactionCurrencyCode = currency },
-                },
+                approved,
+                responseMessage = approved ? "The payment was successful" : "The payment was declined",
             }, cancellationToken);
             Console.WriteLine("Click to Pay confirmation sent to Mastercard.");
         }

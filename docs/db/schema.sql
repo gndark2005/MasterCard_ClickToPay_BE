@@ -3,9 +3,9 @@
 -- (src/MC_ClickToPay.Services/MC_ClickToPay.Services/Database/Migrations), applied when the API starts.
 --
 -- Lifecycle of a row in checkout_transactions:
---   POST /api/checkout (200)                                        -> inserted as 'Pending'
---   POST /api/checkout/confirmations (JSON or batch), Mastercard 204 -> 'Confirmed'
---   ... Mastercard rejected it or failed                            -> 'ConfirmationFailed' (can be confirmed again)
+--   POST /api/checkout (200)                           -> inserted as 'Pending'
+--   POST /api/confirmations/{spiToken}, Mastercard 204 -> 'Confirmed'
+--   ... Mastercard rejected it or failed               -> 'ConfirmationFailed' (can be confirmed again)
 -- No card data is stored. spi_token is the PowerTranz SPI token: restrict access to the tables.
 --
 -- Replace <app-password> with a random password and put the same one in ConnectionStrings:ClickToPay.

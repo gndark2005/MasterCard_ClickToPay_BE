@@ -12,7 +12,7 @@ public sealed class CorsTests
 
     [Theory]
     [InlineData("/api/checkout")]
-    [InlineData("/api/checkout/confirmations")]
+    [InlineData("/api/confirmations/spi-token-1")]
     public async Task PreflightFromTheHppIsAnsweredWithoutAnApiKey(string route)
     {
         using var factory = new PayloadApiFactory();

@@ -22,7 +22,7 @@ public sealed record ConfirmationOutcome(bool Confirmed, string? FlowId, int? Ht
 
 /// <summary>
 /// The checkout state database (MySQL table checkout_transactions, see docs/db/schema.sql). It is the source of the
-/// checkout state; the daily CSV file stays as a backup and for batch uploads.
+/// checkout state; the daily CSV file holds the payment outcome that POST /api/confirmations/{spiToken} sends.
 /// </summary>
 public interface ICheckoutTransactionStore
 {

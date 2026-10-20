@@ -2,14 +2,12 @@ using FastEndpoints;
 using FastEndpoints.Swagger;
 using MC_ClickToPay.Api.Authentication;
 using MC_ClickToPay.Api.Configuration;
-using MC_ClickToPay.Api.Endpoints.Checkout;
 using MC_ClickToPay.Api.Keys;
 using MC_ClickToPay.Api.Simulation;
 using MC_ClickToPay.Services.Abstractions;
 using MC_ClickToPay.Services.DependencyInjection;
 using MC_ClickToPay.Services.Payments.PowerTranz;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 if (builder.Environment.IsDevelopment())
@@ -88,19 +86,6 @@ app.UseHttpsRedirection();
 app.Use(async (context, next) =>
 {
     context.Response.Headers.CacheControl = "no-store";
-    await next(context);
-});
-
-// The batch confirmation upload is the only request allowed above the 256 KiB default (a daily file has many rows).
-app.Use(async (context, next) =>
-{
-    if (HttpMethods.IsPost(context.Request.Method) && context.Request.HasFormContentType &&
-        context.Request.Path.Equals(ConfirmCheckoutEndpoint.Route, StringComparison.OrdinalIgnoreCase) &&
-        context.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit)
-    {
-        limit.MaxRequestBodySize = ConfirmCheckoutEndpoint.MaximumFileUploadBytes;
-    }
-
     await next(context);
 });
 

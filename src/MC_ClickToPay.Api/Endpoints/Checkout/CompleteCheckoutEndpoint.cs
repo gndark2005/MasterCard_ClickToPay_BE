@@ -60,7 +60,7 @@ public sealed class CompleteCheckoutEndpoint(
                 payload.DynamicData?.DynamicDataType ?? "-", result.Eci ?? "-");
             var response = CompleteCheckoutResponse.From(payload);
 
-            // Pending state (database) and confirmation batch (file): recorded only once the 200 has been sent, so
+            // Pending state (database) and transaction file row (read by the confirmation): recorded only once the 200 has been sent, so
             // neither ever delays or fails it.
             HttpContext.Response.OnCompleted(() => RecordTransactionAsync(request));
             await Send.OkAsync(response, ct);

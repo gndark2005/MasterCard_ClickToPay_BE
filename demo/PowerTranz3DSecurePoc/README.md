@@ -43,8 +43,9 @@ Chromium window with Playwright, so the 3DS JavaScript, the challenge and the re
      (`assuranceData.eci`), cardholder name, email and billing address.
 3. The app sends the usual PowerTranz flow (steps 1–3 above) with the **network token as `CardPan`**, the token expiry,
    no CVV, and the cryptogram and ECI in `Source` under `ClickToPay:CryptogramSourceField` / `EciSourceField`.
-4. **`POST /api/checkout/confirmations`** reports the result (approved or not) back to Mastercard. A failed
-   confirmation is logged and never changes the payment result.
+4. **`POST /api/confirmations/{spiToken}`** reports the result back to Mastercard. The demo has no SPI token at
+   checkout time, so it sends `poc-<srcCorrelationId>` as the token to `/api/checkout` and confirms with the same one,
+   with `approved` from the payment. A failed confirmation is logged and never changes the payment result.
 
 ## Required settings
 

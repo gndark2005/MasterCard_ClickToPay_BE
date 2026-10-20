@@ -1,5 +1,6 @@
 using MC_ClickToPay.Services.Abstractions;
 using MC_ClickToPay.Services.Checkout;
+using MC_ClickToPay.Services.Confirmations;
 using MC_ClickToPay.Services.Payments;
 using MC_ClickToPay.Services.Payments.PowerTranz;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,7 +22,7 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Registers the server-side Click to Pay client (/checkout and /checkout/confirmations), the daily
-    /// transaction file and the confirmation batch that processes it. Requires
+    /// transaction file and the confirmation of its transactions by SPI token. Requires
     /// <see cref="AddMastercardPayloadDecryption{TKeyProvider}"/>; the API configures <see cref="MastercardCheckoutOptions"/>.
     /// </summary>
     public static IServiceCollection AddMastercardCheckout<TSigningKeyProvider>(this IServiceCollection services)
@@ -32,7 +33,7 @@ public static class ServiceCollectionExtensions
             client => client.Timeout = TimeSpan.FromSeconds(30));
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ICheckoutTransactionFile, CsvCheckoutTransactionFile>();
-        services.TryAddScoped<CheckoutConfirmationBatch>();
+        services.TryAddScoped<TransactionConfirmationService>();
         services.TryAddSingleton<ICheckoutTransactionStore, NoCheckoutTransactionStore>();
         services.TryAddScoped<CheckoutStateRecorder>();
         return services;

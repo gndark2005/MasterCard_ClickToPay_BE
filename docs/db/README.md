@@ -5,7 +5,7 @@ The API records every checkout in the MySQL table `checkout_transactions` ([sche
 | Event | `status` |
 |---|---|
 | `POST /api/checkout` answers 200 | `Pending` |
-| `POST /api/checkout/confirmations` (JSON or batch file), Mastercard answers 204 | `Confirmed` |
+| `POST /api/confirmations/{spiToken}`, Mastercard answers 204 | `Confirmed` |
 | Mastercard rejects the confirmation or cannot be reached | `ConfirmationFailed` (confirm it again later) |
 
 - `confirmation_attempts` counts every confirmation; a `Confirmed` row stays `Confirmed` if a later attempt fails
@@ -15,7 +15,8 @@ The API records every checkout in the MySQL table `checkout_transactions` ([sche
 - A repeated checkout (same `srcCorrelationId`) refreshes its data and keeps its status.
 - The database never fails a request: Mastercard has already been called, so an error is only logged with the ids.
 - No card data is stored. `spi_token` is the PowerTranz SPI token: keep access to the table restricted.
-- The daily CSV file is still written as a backup and for batch uploads.
+- The daily CSV file is still written: the confirmation finds the transaction in it by SPI token and writes the payment
+  outcome and its result to the row too.
 
 The API enables it when `ConnectionStrings:ClickToPay` is set. Without the connection string nothing is recorded.
 The database and the user must exist ([schema.sql](schema.sql)); the tables come from the migrations below.

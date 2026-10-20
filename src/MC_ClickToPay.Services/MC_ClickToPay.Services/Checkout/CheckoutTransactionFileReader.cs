@@ -5,7 +5,13 @@ namespace MC_ClickToPay.Services.Checkout;
 /// <summary>One data row of the daily transaction file. <see cref="Line"/> is its line number in the file (header = 1).</summary>
 public sealed class CheckoutTransactionRow
 {
+    /// <summary>Name of the file the row was read from (ctp_txn_YYYYMMDD.csv), when it was read from disk.</summary>
+    public string? FileName { get; init; }
+
     public required int Line { get; init; }
+
+    /// <summary>The PowerTranz SPI token. Never logged or returned.</summary>
+    public string? SpiToken { get; init; }
 
     public string? TransactionAmount { get; init; }
 
@@ -30,20 +36,21 @@ public sealed class CheckoutTransactionRow
     public string? NetworkAuthorizationCode { get; init; }
 
     public string? NetworkTransactionIdentifier { get; init; }
+
+    /// <summary>Result of the last confirmation to Mastercard (Confirmed or ConfirmationFailed); null when never confirmed.</summary>
+    public string? ConfirmationResult { get; init; }
 }
 
-/// <summary>The uploaded file cannot be read as a transaction file (empty, malformed or missing required columns).</summary>
+/// <summary>A transaction file cannot be read (empty, malformed or missing required columns).</summary>
 public sealed class InvalidTransactionFileException(string message) : Exception(message);
 
 /// <summary>
 /// Reads the daily transaction file (see <see cref="CsvCheckoutTransactionFile"/>): RFC 4180 CSV with a header row.
 /// Columns are found by name (case-insensitive), so their order does not matter and files written before the outcome
-/// columns existed are still read (those rows have no outcome). The spitoken column is never read.
+/// or confirmation result columns existed are still read (those values are null).
 /// </summary>
 public static class CheckoutTransactionFileReader
 {
-    public const int MaximumRows = 10_000;
-
     private static readonly string[] RequiredColumns =
         ["transaction_amount", "transaction_currency", "SrcCorrelationId", "MerchantTransactionId", "FlowId", "XCorrelationId"];
 
@@ -51,9 +58,12 @@ public static class CheckoutTransactionFileReader
     {
         using var reader = new StreamReader(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             detectEncodingFromByteOrderMarks: true);
-        var text = await reader.ReadToEndAsync(cancellationToken);
-        var records = Parse(text);
+        return Read(await reader.ReadToEndAsync(cancellationToken));
+    }
 
+    public static IReadOnlyList<CheckoutTransactionRow> Read(string text, string? fileName = null)
+    {
+        var records = Parse(text);
         if (records.Count == 0 || records[0].Fields.All(string.IsNullOrWhiteSpace))
         {
             throw new InvalidTransactionFileException("The file is empty: a header row is required.");
@@ -78,11 +88,6 @@ public static class CheckoutTransactionFileReader
                 continue;
             }
 
-            if (rows.Count == MaximumRows)
-            {
-                throw new InvalidTransactionFileException($"The file has more than {MaximumRows} rows.");
-            }
-
             string? Field(string column) =>
                 header.TryGetValue(column, out var index) && index < record.Fields.Count && !string.IsNullOrWhiteSpace(record.Fields[index])
                     ? record.Fields[index].Trim()
@@ -90,7 +95,9 @@ public static class CheckoutTransactionFileReader
 
             rows.Add(new CheckoutTransactionRow
             {
+                FileName = fileName,
                 Line = record.Line,
+                SpiToken = Field("spitoken"),
                 TransactionAmount = Field("transaction_amount"),
                 TransactionCurrency = Field("transaction_currency"),
                 SrcCorrelationId = Field("SrcCorrelationId"),
@@ -102,17 +109,22 @@ public static class CheckoutTransactionFileReader
                 ConfirmationStatus = Field("confirmation_status"),
                 ConfirmationReason = Field("confirmation_reason"),
                 NetworkAuthorizationCode = Field("network_authorization_code"),
-                NetworkTransactionIdentifier = Field("network_transaction_identifier")
+                NetworkTransactionIdentifier = Field("network_transaction_identifier"),
+                ConfirmationResult = Field("confirmation_result")
             });
         }
 
         return rows;
     }
 
-    private sealed record Record(int Line, List<string> Fields);
+    internal sealed record Record(int Line, List<string> Fields);
+
+    /// <summary>RFC 4180: quotes a value that holds a comma, quote or line break.</summary>
+    internal static string Escape(string value) =>
+        value.AsSpan().IndexOfAny(",\"\r\n") < 0 ? value : $"\"{value.Replace("\"", "\"\"")}\"";
 
     // RFC 4180: quoted fields may hold commas, doubled quotes and line breaks.
-    private static List<Record> Parse(string text)
+    internal static List<Record> Parse(string text)
     {
         var records = new List<Record>();
         var fields = new List<string>();

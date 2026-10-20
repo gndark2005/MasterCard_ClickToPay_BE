@@ -5,8 +5,9 @@ namespace MC_ClickToPay.Services.Checkout;
 
 /// <summary>
 /// What the UI sends after checkoutWithCard(): the Mastercard values (checkoutResponseData and headers) plus the
-/// PowerTranz SPI token of its payment. The SPI token is not used here (the UI calls PowerTranz itself with the
-/// decrypted card); it is never logged and is only written to the daily transaction file for the confirmation batch.
+/// SPI token the PowerTranz HPP generated for its payment. The SPI token is not used by the checkout (the HPP calls
+/// PowerTranz itself with the decrypted card); it is never logged and is written to the daily transaction file, where
+/// POST /api/confirmations/{spiToken} finds the transaction to confirm.
 /// </summary>
 public sealed class CompleteCheckoutRequest
 {
@@ -59,9 +60,9 @@ public sealed class CompleteCheckoutResult
 }
 
 /// <summary>
-/// Body of POST /api/checkout/confirmations: the Mastercard /checkout/confirmations body (correlationId,
-/// merchantTransactionId, confirmationData) plus the two values Mastercard takes as headers (flowId →
-/// X-Src-Cx-Flow-Id, merchantTransactionId → merchant-transaction-id) and the caller's own tracing id.
+/// One confirmation for Mastercard /checkout/confirmations, built from a transaction file row: its body
+/// (correlationId, merchantTransactionId, confirmationData) plus the two values Mastercard takes as headers (flowId →
+/// X-Src-Cx-Flow-Id, merchantTransactionId → merchant-transaction-id) and the transaction's own tracing id.
 /// </summary>
 public sealed class CheckoutConfirmationRequest
 {
