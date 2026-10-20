@@ -85,10 +85,13 @@ public sealed class ClickToPayService : IDisposable
 
     /// <summary>
     /// Best effort: a failed confirmation is logged and never changes the payment outcome. The API finds the checkout
-    /// by the SPI token and sends Mastercard the payment result given here.
+    /// by the SPI token and sends Mastercard the PowerTranz result. Mastercard rejects a confirmation without
+    /// networkAuthorizationCode and networkTransactionIdentifier (400 INVALID_ARGUMENT, sandbox 2026-10-20).
     /// </summary>
-    public async Task ConfirmAsync(ClickToPayCheckout checkout, bool approved, CancellationToken cancellationToken)
+    public async Task ConfirmAsync(ClickToPayCheckout checkout, PaymentOutcome outcome, CancellationToken cancellationToken)
     {
+        var approved = outcome.Kind == OutcomeKind.Approved;
+        var response = outcome.Response;
         Console.WriteLine();
         Console.WriteLine($"POST {_httpClient.BaseAddress}api/confirmations/{{spiToken}} (approved={approved})");
         try
@@ -96,7 +99,9 @@ public sealed class ClickToPayService : IDisposable
             await PostAsync($"api/confirmations/{Uri.EscapeDataString(DemoSpiToken(checkout))}", new
             {
                 approved,
-                responseMessage = approved ? "The payment was successful" : "The payment was declined",
+                authorizationCode = response?.AuthorizationCode,
+                responseMessage = response?.ResponseMessage ?? outcome.Message,
+                networkTransactionIdentifier = "mastercard",
             }, cancellationToken);
             Console.WriteLine("Click to Pay confirmation sent to Mastercard.");
         }

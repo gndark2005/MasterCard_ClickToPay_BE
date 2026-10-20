@@ -155,7 +155,7 @@ static async Task<PaymentOutcome> RunClickToPayPaymentAsync(PowerTranzService po
     var outcome = await RunPaymentAsync(powerTranz, browser.RunInIframeAsync, amount, payment.Card, payment.Billing,
         cancellationToken, payment.ExtraSourceFields);
     if (outcome.Kind != OutcomeKind.Cancelled)
-        await clickToPay.ConfirmAsync(checkout, outcome.Kind == OutcomeKind.Approved, cancellationToken);
+        await clickToPay.ConfirmAsync(checkout, outcome, cancellationToken);
     return outcome;
 }
 
@@ -246,12 +246,12 @@ static async Task<PaymentOutcome> RunPaymentAsync(PowerTranzService powerTranz,
         var details = Details(payment, authentication, issuerMessage);
         if (payment.Approved)
             return new PaymentOutcome(OutcomeKind.Approved, "Payment approved",
-                $"{payment.TotalAmount:0.00} charged. {payment.ResponseMessage}", details);
+                $"{payment.TotalAmount:0.00} charged. {payment.ResponseMessage}", details, Response: payment);
 
         var reason = $"[{payment.IsoResponseCode}] {payment.ResponseMessage}";
         if (payment.Errors is { Count: > 0 })
             reason += " " + Describe(payment.Errors);
-        return new PaymentOutcome(OutcomeKind.Declined, "Payment not approved", reason, details);
+        return new PaymentOutcome(OutcomeKind.Declined, "Payment not approved", reason, details, Response: payment);
     }
     catch (PaymentCancelledException ex)
     {
@@ -276,7 +276,7 @@ static async Task<PaymentOutcome> RunPaymentAsync(PowerTranzService powerTranz,
 }
 
 static PaymentOutcome Result(OutcomeKind kind, string title, string message, SaleResponse response) =>
-    new(kind, title, message, Details(response, null, null));
+    new(kind, title, message, Details(response, null, null), Response: response);
 
 static PaymentOutcome Failure(string title, Exception ex, bool full) =>
     new(OutcomeKind.Error, title, ex.Message, [], full ? ex.ToString() : $"{ex.GetType().FullName}: {ex.Message}");

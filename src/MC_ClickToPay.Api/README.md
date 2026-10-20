@@ -223,6 +223,11 @@ curl -k -X POST https://localhost:7180/api/confirmations/<spiToken> -H "X-Api-Ke
 | `responseMessage` | no, max 255 | `ResponseMessage` | `confirmationReason` |
 | `networkTransactionIdentifier` | no, max 255 | - | `networkTransactionIdentifier` (e.g. `mastercard`) |
 
+**Send `authorizationCode` and `networkTransactionIdentifier`.** Verified against the Mastercard sandbox on
+2026-10-20 with a real Click to Pay checkout and a PowerTranz approved payment: without them Mastercard answers
+`400 [INVALID_ARGUMENT] One or more fields in the request are either missing or does not have correct value`; with
+them (`123456`, `mastercard`) it accepts the confirmation.
+
 1. Finds the row of the SPI token.
 2. Sends `SrcCorrelationId` (body `correlationId`), `MerchantTransactionId` (body and `merchant-transaction-id`
    header), `FlowId` (`X-Src-Cx-Flow-Id` header), the amount and the outcome. `confirmationTimestamp` is now (UTC).
