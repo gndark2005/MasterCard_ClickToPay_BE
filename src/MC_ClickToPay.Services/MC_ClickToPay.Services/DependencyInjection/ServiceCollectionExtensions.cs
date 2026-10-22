@@ -40,14 +40,16 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Records checkout state in MySQL (table checkout_transactions). The schema comes from the migrations in
-    /// Database/Migrations, applied at startup by <see cref="Database.DatabaseMigrator"/>. Without a connection string
-    /// nothing is recorded and the API works as before. Call it before <see cref="AddMastercardCheckout{T}"/>.
+    /// Records checkout state (table checkout_transactions) and the API request log (table api_request_log) in MySQL.
+    /// The schema comes from the migrations in Database/Migrations, applied at startup by
+    /// <see cref="Database.DatabaseMigrator"/>. Without a connection string nothing is recorded in a database and the
+    /// API works as before. Call it before <see cref="AddMastercardCheckout{T}"/>.
     /// </summary>
     public static IServiceCollection AddCheckoutDatabase(this IServiceCollection services, string? connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
         {
+            services.TryAddSingleton<Database.IApiRequestLogStore, Database.NoApiRequestLogStore>();
             return services;
         }
 
@@ -56,6 +58,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<MySqlCheckoutTransactionStore>();
         services.AddSingleton<ICheckoutTransactionStore>(sp => sp.GetRequiredService<MySqlCheckoutTransactionStore>());
         services.AddSingleton<Database.DatabaseMigrator>();
+        services.TryAddSingleton<Database.IApiRequestLogStore, Database.MySqlApiRequestLogStore>();
         return services;
     }
 

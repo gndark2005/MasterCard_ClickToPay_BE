@@ -1,6 +1,7 @@
 using FastEndpoints;
 using FluentValidation;
 using MC_ClickToPay.Api.Keys;
+using MC_ClickToPay.Api.Logging;
 using MC_ClickToPay.Services.Abstractions;
 using MC_ClickToPay.Services.Checkout;
 using MC_ClickToPay.Services.Exceptions;
@@ -47,6 +48,7 @@ public sealed class CompleteCheckoutEndpoint(
     public override async Task HandleAsync(CompleteCheckoutRequest request, CancellationToken ct)
     {
         HttpContext.Response.Headers["X-Correlation-Id"] = request.XCorrelationId;
+        ApiRequestLog.SetSrcCorrelationId(HttpContext, request.SrcCorrelationId);
         using var scope = logger.BeginScope(new Dictionary<string, object> { ["XCorrelationId"] = request.XCorrelationId });
         try
         {

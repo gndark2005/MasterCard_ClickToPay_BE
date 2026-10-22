@@ -305,6 +305,24 @@ date,time,spitoken,transaction_amount,transaction_currency,SrcDpaId,SrcCorrelati
 `date` is `YYYYMMDD`, `time` `HHMMSS`; values with a comma or quote are quoted (RFC 4180). No card data is written,
 but the file holds SPI tokens: restrict access to the folder.
 
+## Logging
+
+Two places, both on by default:
+
+| Where | What | Setting |
+|---|---|---|
+| File `api-YYYYMMDD.log` | Everything the API logs (Information and up): each `/api/*` request with route, status, duration, correlation ids and error; Mastercard calls; startup, migrations, database errors. One file per day, the last 30 kept. | `FileLogging:Directory` (default `logs`, relative to the API folder; on the server `C:\clicktopay\logs`), `FileLogging:RetainedDays` |
+| MySQL `api_request_log` | One row per `/api/*` request, successful or not, with its error. Only when `ConnectionStrings:ClickToPay` is set. | Migration `0002`; see [docs/db/README.md](../../docs/db/README.md#request-log-api_request_log) |
+
+- The file log is the one to read when the API does not start (settings, keys, a failed migration) or MySQL is down:
+  those errors cannot reach the database. Under IIS the console is discarded, so the file is the only record.
+- The IIS app pool identity needs write access to the log folder.
+- Never logged: card data, cryptograms, request/response bodies, SPI tokens (requests are logged with the route
+  template, and `Microsoft.AspNetCore` stays at Warning because its own request logs carry the path).
+- Levels can be changed in the `Serilog` section, e.g. `"Serilog": { "MinimumLevel": { "Default": "Warning" } }`.
+- Example line: `[WRN] ApiRequestLogMiddleware: POST /api/confirmations/{spiToken} -> 409 in 21 ms (srcCorrelationId
+  34f4a04b..., x-correlation-id ...): Transaction not confirmed again. The transaction was already confirmed to Mastercard.`
+
 ## Tests
 
 ```powershell

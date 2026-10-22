@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using FastEndpoints;
 using FluentValidation;
 using MC_ClickToPay.Api.Endpoints.Checkout;
+using MC_ClickToPay.Api.Logging;
 using MC_ClickToPay.Services.Confirmations;
 
 namespace MC_ClickToPay.Api.Endpoints.Confirmations;
@@ -104,6 +105,7 @@ public sealed class ConfirmTransactionEndpoint(TransactionConfirmationService co
             return;
         }
 
+        ApiRequestLog.SetSrcCorrelationId(HttpContext, result.CorrelationId);
         if (!string.IsNullOrWhiteSpace(result.XCorrelationId))
         {
             HttpContext.Response.Headers["X-Correlation-Id"] = result.XCorrelationId;

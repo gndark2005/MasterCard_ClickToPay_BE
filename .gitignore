@@ -10,3 +10,5 @@ TestResults/
 ctp_txn_*.csv
 # Local key paths and passwords (loaded only in Development). Never commit.
 **/appsettings.Local.json
+# API log files (FileLogging:Directory).
+logs/

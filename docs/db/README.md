@@ -29,6 +29,7 @@ The schema is versioned in SQL scripts embedded in the `MC_ClickToPay.Services` 
 | Migration | What |
 |---|---|
 | `0001_create_checkout_transactions.sql` | Table `checkout_transactions` |
+| `0002_create_api_request_log.sql` | Table `api_request_log`: one row per `/api/*` request (see below) |
 
 When the API starts (`DatabaseMigrator`, called by `CheckoutSchemaInitializer`):
 
@@ -114,4 +115,31 @@ ORDER BY checkout_at;
 SELECT src_correlation_id, merchant_transaction_id, flow_id, status, mastercard_detail
 FROM clicktopay.checkout_transactions
 WHERE status IN ('Pending', 'ConfirmationFailed');
+
+-- Today's failed requests (4xx/5xx) with their error
+SELECT request_at, method, route, http_status, src_correlation_id, x_correlation_id, error_title, error_detail, exception_type
+FROM clicktopay.api_request_log
+WHERE request_at >= UTC_DATE() AND http_status >= 400
+ORDER BY request_at DESC;
+
+-- Every request of one checkout
+SELECT request_at, route, http_status, duration_ms, error_title, error_detail
+FROM clicktopay.api_request_log
+WHERE src_correlation_id = '<srcCorrelationId>'
+ORDER BY request_at;
 ```
+
+## Request log (`api_request_log`)
+
+Every request to `/api/*` (successful or not; not Swagger, not CORS preflights) adds one row: `request_at` (UTC),
+`method`, `route`, `http_status`, `duration_ms`, `src_correlation_id`, `x_correlation_id`, `client_ip`, `trace_id`
+and, for errors, `error_title` / `error_detail` (the Problem Details or validation messages) or `exception_type`.
+
+- `route` is the template (`/api/confirmations/{spiToken}`): the SPI token, request and response bodies and card data
+  are never stored.
+- Rows are written in the background after the response: the log never delays or fails a request. If MySQL is down,
+  the rows are lost but every request is still in the file log (`FileLogging:Directory`).
+- `client_ip` comes from `CF-Connecting-IP` (Cloudflare), `X-Forwarded-For` or the connection; informational only.
+- The table grows with every request. Purge old rows when needed, e.g.
+  `DELETE FROM clicktopay.api_request_log WHERE request_at < UTC_DATE() - INTERVAL 90 DAY;` (as root: the app user has
+  no `DELETE`).

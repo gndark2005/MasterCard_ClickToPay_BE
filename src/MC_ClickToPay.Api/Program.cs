@@ -3,11 +3,13 @@ using FastEndpoints.Swagger;
 using MC_ClickToPay.Api.Authentication;
 using MC_ClickToPay.Api.Configuration;
 using MC_ClickToPay.Api.Keys;
+using MC_ClickToPay.Api.Logging;
 using MC_ClickToPay.Api.Simulation;
 using MC_ClickToPay.Services.Abstractions;
 using MC_ClickToPay.Services.DependencyInjection;
 using MC_ClickToPay.Services.Payments.PowerTranz;
 using Microsoft.AspNetCore.Authentication;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 if (builder.Environment.IsDevelopment())
@@ -15,6 +17,10 @@ if (builder.Environment.IsDevelopment())
     // Git-ignored local settings (key paths, passwords); they override appsettings.json and User Secrets.
     builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 }
+
+// Console + daily file (FileLogging:Directory), so errors are kept on the server; see Logging/FileLogging.cs.
+builder.Services.AddSerilog((services, logger) =>
+    FileLogging.Configure(logger, builder.Configuration, builder.Environment, services), preserveStaticLogger: true);
 
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 256 * 1024);
 builder.Services.AddFastEndpoints();
@@ -49,6 +55,10 @@ if (!string.IsNullOrWhiteSpace(checkoutDatabase))
     builder.Services.AddHostedService<CheckoutSchemaInitializer>();
 }
 
+// One row per /api/* request in api_request_log (when the database is configured), written in the background.
+builder.Services.AddSingleton<ApiRequestLogQueue>();
+builder.Services.AddHostedService<ApiRequestLogWriter>();
+
 builder.Services.AddMastercardCheckout<CertificateSigningKeyProvider>();
 if (builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("MastercardApi:Simulate"))
 {
@@ -82,6 +92,8 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
 
 var app = builder.Build();
 app.UseExceptionHandler();
+// Inside the exception handler, so it sees an unhandled exception before it becomes a 500.
+app.UseMiddleware<ApiRequestLogMiddleware>();
 app.UseHttpsRedirection();
 app.Use(async (context, next) =>
 {
@@ -95,7 +107,16 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseFastEndpoints();
 app.UseSwaggerGen();
-app.Run();
+try
+{
+    app.Run();
+}
+catch (Exception ex) when (ex is not HostAbortedException)
+{
+    // Startup failures (settings, keys, migrations) reach the file log too.
+    app.Logger.LogCritical(ex, "The API stopped: it failed to start or crashed.");
+    throw;
+}
 
 // Exposes the entry point for in-process HTTP integration tests.
 public partial class Program;

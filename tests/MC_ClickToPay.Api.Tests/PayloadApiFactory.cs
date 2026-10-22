@@ -45,6 +45,8 @@ public sealed class PayloadApiFactory : WebApplicationFactory<Program>
                 ["MastercardApi:ConsumerKey"] = "",
                 ["MastercardApi:SigningKeyPath"] = "",
                 ["CheckoutTransactionFile:Directory"] = TransactionDirectory,
+                // No log files from the tests (console only).
+                ["FileLogging:Directory"] = "",
             }));
         builder.ConfigureServices(services => services.PostConfigure<PayloadEncryptionOptions>(options =>
         {
