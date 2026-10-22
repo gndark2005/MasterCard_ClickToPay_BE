@@ -62,6 +62,38 @@ public sealed class PayloadDecryptionServiceTests
     }
 
     [Fact]
+    public async Task DecryptsTokenizedPayloadWithDynamicDataArray()
+    {
+        using var key = RSA.Create(2048);
+        // Shape seen in the sandbox: the authentication cryptogram is sent next to the payment one.
+        const string content = """
+            {"threeDsOutputData":[],
+             "dynamicData":[
+               {"dynamicDataExpiration":"2026-10-22T18:30:00.000Z","dynamicDataValue":"cardholder-auth","dynamicData":"cardholder-auth","dynamicDataType":"CARDHOLDER_AUTHENTICATION_CRYPTOGRAM"},
+               {"dynamicDataExpiration":"2026-10-22T18:30:00.000Z","dynamicDataValue":"test-cryptogram","dynamicDataType":"CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM"}],
+             "token":{"paymentToken":"5480983179133165","tokenExpirationMonth":"07","tokenExpirationYear":"2030"}}
+            """;
+
+        var result = Assert.IsType<TokenizedPayloadDto>(await Service(key).DecryptAsync(Request(Encrypt(content, key))));
+
+        Assert.Equal("CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM", result.DynamicData!.DynamicDataType);
+        Assert.Equal("test-cryptogram", result.DynamicData.DynamicDataValue);
+    }
+
+    [Theory]
+    [InlineData("""{"token":{"paymentToken":"5480983179133165"},"dynamicData":[]}""")]
+    [InlineData("""{"token":{"paymentToken":"5480983179133165"},"dynamicData":["x"]}""")]
+    [InlineData("""{"token":{"paymentToken":"5480983179133165"},"dynamicData":[{"dynamicDataValue":"x","dynamicDataType":"CARDHOLDER_AUTHENTICATION_CRYPTOGRAM"}]}""")]
+    [InlineData("""{"token":{"paymentToken":"5480983179133165"},"dynamicData":"x"}""")]
+    public async Task RejectsDynamicDataWithoutPaymentEntry(string content)
+    {
+        using var key = RSA.Create(2048);
+        var exception = await Assert.ThrowsAsync<PayloadDecryptionException>(() =>
+            Service(key).DecryptAsync(Request(Encrypt(content, key))));
+        Assert.Equal(PayloadDecryptionError.InvalidPayload, exception.Error);
+    }
+
+    [Fact]
     public async Task RejectsUnsupportedDynamicDataTypeAsInvalidPayload()
     {
         using var key = RSA.Create(2048);

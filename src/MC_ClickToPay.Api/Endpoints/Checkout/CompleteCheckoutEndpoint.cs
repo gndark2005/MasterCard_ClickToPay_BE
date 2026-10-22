@@ -22,8 +22,9 @@ public sealed class CompleteCheckoutEndpoint(
             s.Description = "Takes the srcCorrelationId, merchant-transaction-id and x-src-cx-flow-id returned by " +
                 "checkoutWithCard(), calls Mastercard POST /srci/api/checkout (OAuth 1.0a) and decrypts the " +
                 "encryptedPayload. Returns flat card and bill-to/ship-to fields for the UI's PowerTranz SPI request: " +
-                "cardNo (the PAN, or the network token when Mastercard sent only a token) and cardExpDate (YYMM) " +
-                "are always set; every other field is null when Mastercard did not send it. cardCVV2 is the dynamic " +
+                "cardNo (the PAN, or the network token when Mastercard sent only a token) and cardExpDate (MMYY) " +
+                "are always set; every other field is null when Mastercard did not send it. billToCountry and " +
+                "shipToCountry are ISO 3166 numeric codes (e.g. 840). cardCVV2 is the dynamic " +
                 "security code of DYNAMIC_CARD_SECURITY_CODE payloads. No PowerTranz call is made. srcDpaId is the " +
                 "merchant's DPA and is sent as is to Mastercard.";
             s.ExampleRequest = new CompleteCheckoutRequest

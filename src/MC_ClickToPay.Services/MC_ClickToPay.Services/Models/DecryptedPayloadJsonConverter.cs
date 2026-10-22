@@ -28,9 +28,11 @@ public sealed class DecryptedPayloadJsonConverter : JsonConverter<DecryptedPaylo
             throw new JsonException("The decrypted payload must be a JSON object.");
         }
 
+        // dynamicData may be an object or an array; the payment entry decides the model.
         string? dynamicDataType = null;
-        if (root.TryGetProperty("dynamicData", out var dynamicData) && dynamicData.ValueKind == JsonValueKind.Object &&
-            dynamicData.TryGetProperty("dynamicDataType", out var type))
+        if (root.TryGetProperty("dynamicData", out var dynamicData) &&
+            DynamicDataJsonConverter.SelectEntry(dynamicData) is { } entry &&
+            entry.TryGetProperty("dynamicDataType", out var type))
         {
             dynamicDataType = type.ValueKind switch
             {

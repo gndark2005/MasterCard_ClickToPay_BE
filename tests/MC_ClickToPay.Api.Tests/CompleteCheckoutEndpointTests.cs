@@ -44,7 +44,7 @@ public sealed class CompleteCheckoutEndpointTests
         var body = await PostAsync(decrypted);
 
         Assert.Equal("5120350100064537", body.GetProperty("cardNo").GetString());
-        Assert.Equal("2907", body.GetProperty("cardExpDate").GetString());
+        Assert.Equal("0729", body.GetProperty("cardExpDate").GetString());
         Assert.Equal(JsonValueKind.Null, body.GetProperty("cardCVV2").ValueKind);
         Assert.Equal("John Doe", body.GetProperty("cardholderName").GetString());
         Assert.Equal("John", body.GetProperty("billToFirstName").GetString());
@@ -53,13 +53,14 @@ public sealed class CompleteCheckoutEndpointTests
         Assert.Equal(JsonValueKind.Null, body.GetProperty("billToAddress2").ValueKind);
         Assert.Equal("NY", body.GetProperty("billToState").GetString());
         Assert.Equal("10011", body.GetProperty("billToPostCode").GetString());
-        Assert.Equal("US", body.GetProperty("billToCountry").GetString());
+        Assert.Equal("840", body.GetProperty("billToCountry").GetString());
         Assert.Equal("12125550100", body.GetProperty("billToTelephone").GetString());
         Assert.Equal("john.doe@example.com", body.GetProperty("billToEmail").GetString());
         Assert.Equal("Mary Ann", body.GetProperty("shipToFirstName").GetString());
         Assert.Equal("Smith", body.GetProperty("shipToLastName").GetString());
         Assert.Equal("Apt 2", body.GetProperty("shipToAddress2").GetString());
         Assert.Equal("90001", body.GetProperty("shipToPostCode").GetString());
+        Assert.Equal("840", body.GetProperty("shipToCountry").GetString());
 
         // The cryptogram and token are not part of the flat response.
         Assert.DoesNotContain("AH14E2rQmy6mABQkMkPpAAADFA==", body.GetRawText(), StringComparison.Ordinal);
@@ -71,7 +72,7 @@ public sealed class CompleteCheckoutEndpointTests
         var body = await PostAsync("""{"card":{"primaryAccountNumber":"5120350100064537","panExpirationMonth":"12","panExpirationYear":"2030"},"dynamicData":{"dynamicDataValue":"637","dynamicDataType":"DYNAMIC_CARD_SECURITY_CODE"}}""");
 
         Assert.Equal("5120350100064537", body.GetProperty("cardNo").GetString());
-        Assert.Equal("3012", body.GetProperty("cardExpDate").GetString());
+        Assert.Equal("1230", body.GetProperty("cardExpDate").GetString());
         Assert.Equal("637", body.GetProperty("cardCVV2").GetString());
     }
 
@@ -93,20 +94,34 @@ public sealed class CompleteCheckoutEndpointTests
         var body = await PostAsync("""{"token":{"paymentToken":"5186051929138756","tokenExpirationMonth":"09","tokenExpirationYear":"2029","cardholderFullName":"Adelle Ryan"},"dynamicData":{"dynamicDataValue":"AAnIdMIzlaW+ACJyvravAAADFA==","dynamicDataType":"CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM"}}""");
 
         Assert.Equal("5186051929138756", body.GetProperty("cardNo").GetString());
-        Assert.Equal("2909", body.GetProperty("cardExpDate").GetString());
+        Assert.Equal("0929", body.GetProperty("cardExpDate").GetString());
         Assert.Equal("Adelle Ryan", body.GetProperty("cardholderName").GetString());
+    }
+
+    [Theory]
+    [InlineData("MX", "484")]
+    [InlineData("840", "840")]
+    // Not in the PowerTranz table: returned as sent.
+    [InlineData("ZZ", "ZZ")]
+    public async Task CountryIsReturnedAsIsoNumeric(string countryCode, string expected)
+    {
+        var body = await PostAsync("""{"card":{"primaryAccountNumber":"5120350100064537","panExpirationMonth":"3","panExpirationYear":"2031"},"dynamicData":{"dynamicDataType":"NONE"},"billingAddress":{"countryCode":"COUNTRY"}}"""
+            .Replace("COUNTRY", countryCode, StringComparison.Ordinal));
+
+        Assert.Equal("0331", body.GetProperty("cardExpDate").GetString());
+        Assert.Equal(expected, body.GetProperty("billToCountry").GetString());
     }
 
     // The four payload types Mastercard sends, as shared by the team (sandbox test data).
     [Theory]
     [InlineData("""{"consumerEmailAddress":"test1234@dummyemail.com","dynamicData":{"dynamicDataValue":"22233445566778899001122334455667788990011223344556677889900112233445566778899001122 3344556677889900","dynamicDataType":"CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM"},"billingAddress":{"zip":"10011","city":"New York City","countryCode":"US","state":"NY","line2":"Floor 10","line1":"100 5th Avenue"},"consumerMobileNumber":{"phoneNumber":"9110717013","countryCode":"1"},"srcTokenResultsData":{"unpredictableNumber":"c44f37b5"},"token":{"paymentToken":"5455030208766644","paymentAccountReference":"5001a9f027e5629d11e3949a0800b","tokenExpirationMonth":"07","cardholderFullName":"john doe","tokenExpirationYear":"2026"}}""",
-        "5455030208766644", "2607", null, "john doe", "19110717013", "Floor 10", null)]
+        "5455030208766644", "0726", null, "john doe", "19110717013", "Floor 10", null)]
     [InlineData("""{"consumerEmailAddress":"test1234@dummyemail.com","dynamicData":{"dynamicDataType":"NONE"},"billingAddress":{"zip":"10011","city":"New York City","countryCode":"US","state":"NY","line2":"Floor 10","line1":"100 5th Avenue"},"consumerMobileNumber":{"phoneNumber":"9912793770","countryCode":"1"},"card":{"cardholderFullName":"john doe","panExpirationYear":"2022","primaryAccountNumber":"5120350100064537","panExpirationMonth":"12"}}""",
-        "5120350100064537", "2212", null, "john doe", "19912793770", "Floor 10", null)]
+        "5120350100064537", "1222", null, "john doe", "19912793770", "Floor 10", null)]
     [InlineData("""{"consumerEmailAddress":"test1234@dummyemail.com","dynamicData":{"dynamicDataValue":"637","dynamicDataType":"DYNAMIC_CARD_SECURITY_CODE"},"billingAddress":{"zip":"10011","city":"New York City","countryCode":"US","state":"NY","line2":"Floor 10","line1":"100 5th Avenue"},"consumerMobileNumber":{"phoneNumber":"9912793770","countryCode":"1"},"card":{"cardholderFullName":"john doe","panExpirationYear":"2030","primaryAccountNumber":"5120350100064537","panExpirationMonth":"12"}}""",
-        "5120350100064537", "3012", "637", "john doe", "19912793770", "Floor 10", null)]
+        "5120350100064537", "1230", "637", "john doe", "19912793770", "Floor 10", null)]
     [InlineData("""{"card":{"primaryAccountNumber":"5120350100064537","panExpirationMonth":"07","panExpirationYear":"2029","cardholderFullName":"John Doe"},"token":{"paymentToken":"************9541","tokenExpirationMonth":"08","tokenExpirationYear":"2027","paymentAccountReference":"5001EN20X29ADV3HFKSFQS6KDII9D","cardholderFullName":"John Doe"},"shippingAddress":{"name":"John Doe","line1":"150 5th Avenue","city":"New York","state":"NY","countryCode":"US","zip":"10011"},"consumerEmailAddress":"john.doe@mastercard.com","consumerMobileNumber":{"countryCode":"44","phoneNumber":"7966778607"},"dynamicData":{"dynamicDataValue":"AH14E2rQmy6mABQkMkPpAAADFA==","dynamicDataType":"CARD_APPLICATION_CRYPTOGRAM_SHORT_FORM"},"billingAddress":{"line1":"150 5th Avenue","city":"New York","state":"NY","countryCode":"US","zip":"10011"}}""",
-        "5120350100064537", "2907", null, "John Doe", "447966778607", null, "150 5th Avenue")]
+        "5120350100064537", "0729", null, "John Doe", "447966778607", null, "150 5th Avenue")]
     public async Task AllMastercardPayloadTypesAreMapped(
         string decrypted, string cardNo, string cardExpDate, string? cvv2, string holder, string telephone,
         string? billToAddress2, string? shipToAddress1)
@@ -122,7 +137,7 @@ public sealed class CompleteCheckoutEndpointTests
         Assert.Equal(shipToAddress1, body.GetProperty("shipToAddress1").GetString());
         Assert.Equal("NY", body.GetProperty("billToState").GetString());
         Assert.Equal("10011", body.GetProperty("billToPostCode").GetString());
-        Assert.Equal("US", body.GetProperty("billToCountry").GetString());
+        Assert.Equal("840", body.GetProperty("billToCountry").GetString());
     }
 
     [Fact]

@@ -1,7 +1,7 @@
 namespace MC_ClickToPay.Services.Payments.PowerTranz;
 
 /// <summary>PowerTranz expects ISO numeric codes; Mastercard sends ISO alphabetic ones.</summary>
-internal static class PowerTranzCodes
+public static class PowerTranzCodes
 {
     private static readonly Dictionary<string, string> Currencies = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -37,6 +37,7 @@ internal static class PowerTranzCodes
             : throw new PaymentProcessingException($"Currency {value} has no PowerTranz numeric code configured.");
     }
 
+    /// <summary>ISO 3166 numeric ("US" -> "840"); numeric codes and unknown alphabetic codes pass through.</summary>
     public static string? Country(string? code) =>
         string.IsNullOrWhiteSpace(code) ? null
         : code.All(char.IsAsciiDigit) ? code

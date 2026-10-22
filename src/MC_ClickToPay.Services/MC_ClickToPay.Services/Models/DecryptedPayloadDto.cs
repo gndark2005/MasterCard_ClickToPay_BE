@@ -11,7 +11,9 @@ namespace MC_ClickToPay.Services.Models;
 [JsonConverter(typeof(DecryptedPayloadJsonConverter))]
 public abstract class DecryptedPayloadDto
 {
+    /// <summary>The payment entry of dynamicData (Mastercard may send an object or an array).</summary>
     [JsonPropertyName("dynamicData")]
+    [JsonConverter(typeof(DynamicDataJsonConverter))]
     public DynamicDataDto? DynamicData { get; init; }
 
     [JsonPropertyName("srcTokenResultsData")]

@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using MC_ClickToPay.Services.Checkout;
 using MC_ClickToPay.Services.Exceptions;
 using MC_ClickToPay.Services.Models;
+using MC_ClickToPay.Services.Payments.PowerTranz;
 
 namespace MC_ClickToPay.Api.Endpoints.Checkout;
 
@@ -16,7 +17,7 @@ public sealed class CompleteCheckoutResponse
     [JsonPropertyName("cardNo")]
     public required string CardNo { get; init; }
 
-    /// <summary>YYMM, the PowerTranz CardExpiration format.</summary>
+    /// <summary>MMYY, the format of the PowerTranz HPP page's CardExpDate field.</summary>
     [JsonPropertyName("cardExpDate")]
     public required string CardExpDate { get; init; }
 
@@ -45,7 +46,7 @@ public sealed class CompleteCheckoutResponse
     [JsonPropertyName("billToPostCode")]
     public string? BillToPostCode { get; init; }
 
-    /// <summary>ISO 3166 alpha-2, as Mastercard sends it (e.g. "US").</summary>
+    /// <summary>ISO 3166 numeric, as the HPP page expects (Mastercard's "US" -> "840").</summary>
     [JsonPropertyName("billToCountry")]
     public string? BillToCountry { get; init; }
 
@@ -74,6 +75,7 @@ public sealed class CompleteCheckoutResponse
     [JsonPropertyName("shipToPostCode")]
     public string? ShipToPostCode { get; init; }
 
+    /// <summary>ISO 3166 numeric, like <see cref="BillToCountry"/>.</summary>
     [JsonPropertyName("shipToCountry")]
     public string? ShipToCountry { get; init; }
 
@@ -113,7 +115,7 @@ public sealed class CompleteCheckoutResponse
         return new CompleteCheckoutResponse
         {
             CardNo = card.PrimaryAccountNumber,
-            CardExpDate = year[^2..] + month.PadLeft(2, '0'),
+            CardExpDate = month.PadLeft(2, '0') + year[^2..],
             CardCvv2 = isSecurityCode ? NullIfBlank(payload.DynamicData?.DynamicDataValue) : null,
             CardholderName = cardholderName,
             BillToFirstName = billFirst,
@@ -122,7 +124,7 @@ public sealed class CompleteCheckoutResponse
             BillToAddress2 = NullIfBlank(payload.BillingAddress?.Line2),
             BillToState = NullIfBlank(payload.BillingAddress?.State),
             BillToPostCode = NullIfBlank(payload.BillingAddress?.Zip),
-            BillToCountry = NullIfBlank(payload.BillingAddress?.CountryCode),
+            BillToCountry = PowerTranzCodes.Country(NullIfBlank(payload.BillingAddress?.CountryCode)),
             BillToTelephone = telephone,
             BillToEmail = email,
             ShipToFirstName = payload.ShippingAddress is null ? null : shipFirst,
@@ -131,7 +133,7 @@ public sealed class CompleteCheckoutResponse
             ShipToAddress2 = NullIfBlank(payload.ShippingAddress?.Line2),
             ShipToState = NullIfBlank(payload.ShippingAddress?.State),
             ShipToPostCode = NullIfBlank(payload.ShippingAddress?.Zip),
-            ShipToCountry = NullIfBlank(payload.ShippingAddress?.CountryCode),
+            ShipToCountry = PowerTranzCodes.Country(NullIfBlank(payload.ShippingAddress?.CountryCode)),
             ShipToTelephone = payload.ShippingAddress is null ? null : telephone,
             ShipToEmail = payload.ShippingAddress is null ? null : email
         };

@@ -155,8 +155,8 @@ public sealed class ClickToPayService : IDisposable
     }
 
     /// <summary>
-    /// /api/checkout flat response → PowerTranz Sale inputs, as the real UI does: CardNo/CardExpDate (YYMM) go in
-    /// CardPan/CardExpiration, CardCVV2 (dynamic security code) in CardCvv, and the non-null BillTo* fields in
+    /// /api/checkout flat response → PowerTranz Sale inputs, as the real UI does: CardNo/CardExpDate (MMYY, sent to
+    /// PowerTranz as YYMM) go in CardPan/CardExpiration, CardCVV2 (dynamic security code) in CardCvv, and the non-null BillTo* fields in
     /// BillingAddress. The response has no cryptogram or ECI.
     /// </summary>
     public ClickToPayPayment Map(ClickToPayCompleteResult result)
@@ -168,7 +168,7 @@ public sealed class ClickToPayService : IDisposable
         var card = new CardOptions
         {
             Pan = result.CardNo,
-            Expiration = result.CardExpDate,
+            Expiration = result.CardExpDate.Length == 4 ? result.CardExpDate[2..] + result.CardExpDate[..2] : result.CardExpDate,
             Cvv = result.CardCvv2 ?? "",
             HolderName = name,
         };
@@ -186,7 +186,7 @@ public sealed class ClickToPayService : IDisposable
         };
 
         Console.WriteLine("Click to Pay payload decrypted:");
-        Console.WriteLine($"  Card number:    {SensitiveData.MaskPan(result.CardNo)}  Exp (YYMM): {result.CardExpDate}");
+        Console.WriteLine($"  Card number:    {SensitiveData.MaskPan(result.CardNo)}  Exp (MMYY): {result.CardExpDate}");
         Console.WriteLine($"  CVV2 (DTVC):    {(result.CardCvv2 is null ? "-" : "*** (sent as CardCvv)")}");
         Console.WriteLine($"  Cardholder:     {(string.IsNullOrEmpty(name) ? "-" : name)}  Email: {result.BillToEmail ?? "-"}");
         Console.WriteLine($"  Bill to:        {result.BillToState} {result.BillToPostCode} {result.BillToCountry}");

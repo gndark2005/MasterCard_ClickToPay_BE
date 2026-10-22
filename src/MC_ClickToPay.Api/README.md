@@ -137,7 +137,7 @@ calling PowerTranz.
 ```json
 {
   "cardNo": "5120350100064537",
-  "cardExpDate": "2907",
+  "cardExpDate": "0729",
   "cardCVV2": null,
   "cardholderName": "John Doe",
   "billToFirstName": "John",
@@ -146,7 +146,7 @@ calling PowerTranz.
   "billToAddress2": null,
   "billToState": "NY",
   "billToPostCode": "10011",
-  "billToCountry": "US",
+  "billToCountry": "840",
   "billToTelephone": "12125550100",
   "billToEmail": "john.doe@example.com",
   "shipToFirstName": "John",
@@ -155,7 +155,7 @@ calling PowerTranz.
   "shipToAddress2": null,
   "shipToState": "NY",
   "shipToPostCode": "10011",
-  "shipToCountry": "US",
+  "shipToCountry": "840",
   "shipToTelephone": "12125550100",
   "shipToEmail": "john.doe@example.com"
 }
@@ -164,11 +164,11 @@ calling PowerTranz.
 | Field | Source in the decrypted payload |
 |---|---|
 | `cardNo` | `card.primaryAccountNumber`; the network token (`token.paymentToken`) when Mastercard sent only a token |
-| `cardExpDate` | YYMM from the card (or token) expiry month/year |
+| `cardExpDate` | MMYY from the card (or token) expiry month/year, as the HPP page's `CardExpDate` field expects |
 | `cardCVV2` | `dynamicData.dynamicDataValue` only when `dynamicDataType` is `DYNAMIC_CARD_SECURITY_CODE` |
 | `cardholderName` | `card.cardholderFullName`, else the token's, else the consumer's name |
 | `billTo/shipToFirstName`, `LastName` | Address `name` split at the last space; else `consumerFirstName` / `consumerLastName` |
-| `billTo/shipToAddress1`, `Address2`, `State`, `PostCode`, `Country` | Address `line1`, `line2`, `state`, `zip`, `countryCode` (ISO alpha-2) |
+| `billTo/shipToAddress1`, `Address2`, `State`, `PostCode`, `Country` | Address `line1`, `line2`, `state`, `zip`, `countryCode` (Mastercard's ISO alpha-2 returned as ISO numeric: `US` -> `840`; an unmapped code is returned as sent) |
 | `billTo/shipToTelephone` | `consumerMobileNumber`: country code + number, digits only (shipTo only when there is a shipping address) |
 | `billTo/shipToEmail` | `consumerEmailAddress` (shipTo only when there is a shipping address) |
 
